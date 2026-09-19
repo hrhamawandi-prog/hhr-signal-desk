@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+data/portfolio.json
+logs/*.jsonl
+.DS_Store
