@@ -28,7 +28,7 @@ import paper_trader
 BANNER = r"""
   _  _  _  _  ___  ___  _  _  _   ___  ___  ___  _  __
  | || || || || _ \| _ \| || | | / __|| __|| _ \| |/ /
- | __ || __ ||   /|   /| __ | | \__ \| _| |  _/| ' <
+ | __ || __ ||   /|   /| __ | | \__ \| _| |  _/| ' 
  |_||_||_||_||_|_\|_|_\|_||_| |_||___/|___||_|  |_|\_\
                                          SIGNAL DESK
 """
@@ -93,7 +93,12 @@ def main():
         interval_sec = config.DECISION_INTERVAL_MINUTES * 60
         print(f"Running continuously every {config.DECISION_INTERVAL_MINUTES} minutes. Ctrl+C to stop.\n")
         while True:
-            run_cycle()
+            try:
+                run_cycle()
+            except Exception as e:
+                # Never let one bad cycle kill the whole bot — log it and try again
+                # next cycle instead of stopping entirely.
+                print(f"[main] Cycle failed unexpectedly, will retry next cycle: {e}")
             time.sleep(interval_sec)
     else:
         run_cycle()
