@@ -10,6 +10,7 @@ against hard rules, never executed blindly.
 """
 
 import json
+import os
 from datetime import datetime, timezone
 
 import anthropic
@@ -124,6 +125,7 @@ def get_decisions(news_by_symbol: dict, prices: dict, portfolio: dict) -> list[d
 
 def _log_decisions(decisions: list[dict]) -> None:
     """Append decisions to the decisions log so every AI call is auditable later."""
+    os.makedirs(config.LOGS_DIR, exist_ok=True)
     with open(config.DECISIONS_LOG, "a") as f:
         for d in decisions:
             f.write(json.dumps(d) + "\n")
