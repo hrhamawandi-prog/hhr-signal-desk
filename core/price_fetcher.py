@@ -7,6 +7,8 @@ Both return a flat {symbol: price_in_usd} dict so the rest of the bot doesn't ne
 to care where a price came from.
 """
 
+import time
+
 import requests
 
 import config
@@ -38,13 +40,30 @@ def get_crypto_prices(coins: list[str]) -> dict[str, float]:
 
     url = "https://api.coingecko.com/api/v3/simple/price"
     params = {"ids": ",".join(ids), "vs_currencies": "usd"}
+    headers = {}
+    if config.COINGECKO_API_KEY:
+        # Demo-tier key gets its own private rate limit instead of sharing the
+        # public, no-key pool (which is what causes constant 429 errors).
+        headers["x-cg-demo-api-key"] = config.COINGECKO_API_KEY
 
-    try:
-        resp = requests.get(url, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.RequestException as e:
-        print(f"[price_fetcher] Crypto price fetch failed: {e}")
+    # A 429 (rate limited) is often transient — retry a couple of times with a
+    # short backoff before giving up on this cycle's prices entirely.
+    last_error = None
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            if resp.status_code == 429:
+                last_error = f"429 Too Many Requests (attempt {attempt + 1}/3)"
+                time.sleep(5 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            break
+        except requests.RequestException as e:
+            last_error = e
+            time.sleep(5 * (attempt + 1))
+    else:
+        print(f"[price_fetcher] Crypto price fetch failed after retries: {last_error}")
         return {}
 
     prices = {}
