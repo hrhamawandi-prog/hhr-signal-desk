@@ -13,6 +13,11 @@ load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CRYPTOPANIC_API_KEY = os.getenv("CRYPTOPANIC_API_KEY", "")  # free tier: https://cryptopanic.com/developers/api/
 
+# Free CoinGecko "Demo" API key — without one, requests share an overloaded public pool
+# and get blocked constantly (429 errors). With one, you get your own private allowance.
+# Get one free at https://www.coingecko.com/en/developer/dashboard (no credit card needed).
+COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
+
 # OANDA powers gold/silver/oil/forex prices (and later, trading). Free practice
 # account: https://www.oanda.com/demo-account/tpa/personal_finance
 OANDA_API_KEY = os.getenv("OANDA_API_KEY", "")
