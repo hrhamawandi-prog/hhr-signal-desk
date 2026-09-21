@@ -100,7 +100,19 @@ def get_decisions(news_by_symbol: dict, prices: dict, portfolio: dict) -> list[d
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw_text = response.content[0].text.strip()
+
+        # The response can contain more than one block (e.g. an internal "thinking"
+        # block followed by the actual answer), so find the actual text block
+        # instead of assuming it's always content[0].
+        raw_text = None
+        for block in response.content:
+            if getattr(block, "type", None) == "text":
+                raw_text = block.text.strip()
+                break
+
+        if raw_text is None:
+            print("[ai_decision] No text block found in response, skipping this cycle.")
+            return []
 
         # Strip markdown code fences if the model added them despite instructions
         if raw_text.startswith("```"):
@@ -111,7 +123,7 @@ def get_decisions(news_by_symbol: dict, prices: dict, portfolio: dict) -> list[d
 
         decisions = json.loads(raw_text)
 
-    except (anthropic.APIError, json.JSONDecodeError, IndexError, KeyError) as e:
+    except (anthropic.APIError, json.JSONDecodeError, IndexError, KeyError, AttributeError) as e:
         print(f"[ai_decision] Failed to get/parse decisions: {e}")
         return []
 
