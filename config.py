@@ -28,6 +28,12 @@ OANDA_ENVIRONMENT = os.getenv("OANDA_ENVIRONMENT", "practice")  # "practice" or 
 EXCHANGE_NAME = os.getenv("EXCHANGE_NAME", "okx")  # any ccxt-supported id, e.g. "binance", "bybit", "okx"
 EXCHANGE_API_KEY = os.getenv("EXCHANGE_API_KEY", "")
 EXCHANGE_API_SECRET = os.getenv("EXCHANGE_API_SECRET", "")
+EXCHANGE_API_PASSPHRASE = os.getenv("EXCHANGE_API_PASSPHRASE", "")  # OKX requires this in addition to key+secret
+
+# Hard dollar cap per single live trade, independent of MAX_POSITION_SIZE_PCT below.
+# This exists purely so a first real deposit can't accidentally turn into one big live
+# trade — raise it later in Railway's Variables tab once you trust the bot's behavior.
+LIVE_MAX_TRADE_USDT = float(os.getenv("LIVE_MAX_TRADE_USDT", "50"))
 
 # --- Instrument universe ---
 # Every tradable symbol, with its market type and where its price/news come from.
@@ -84,3 +90,9 @@ DECISIONS_LOG = os.path.join(LOGS_DIR, "decisions.jsonl")
 TRADES_LOG = os.path.join(LOGS_DIR, "trades.jsonl")
 PORTFOLIO_FILE = os.path.join(DATA_DIR, "portfolio.json")
 PORTFOLIO_HISTORY_LOG = os.path.join(DATA_DIR, "portfolio_history.jsonl")
+
+# Live-trading uses its own separate files so switching TRADING_MODE back and forth
+# never mixes real account data with the paper-trading simulation.
+LIVE_PORTFOLIO_FILE = os.path.join(DATA_DIR, "live_portfolio.json")
+LIVE_TRADES_LOG = os.path.join(LOGS_DIR, "live_trades.jsonl")
+LIVE_PORTFOLIO_HISTORY_LOG = os.path.join(DATA_DIR, "live_portfolio_history.jsonl")

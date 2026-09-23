@@ -23,6 +23,7 @@ import news_fetcher
 import price_fetcher
 import ai_decision
 import paper_trader
+import live_trader
 import status_server
 
 
@@ -48,14 +49,13 @@ def run_cycle() -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"\n── Cycle · {timestamp} ({config.TRADING_MODE}) ──")
 
-    if config.TRADING_MODE == "live":
-        print(
-            "  TRADING_MODE is set to 'live' but live execution isn't wired up in this "
-            "starter project yet — running as paper trading instead. See README.md "
-            "before ever enabling real trades."
-        )
+    live = config.TRADING_MODE == "live"
+    trader = live_trader if live else paper_trader
 
-    portfolio = paper_trader.load_portfolio()
+    if live:
+        print("  Mode: LIVE — placing real orders on your OKX account (crypto instruments only).")
+
+    portfolio = trader.load_portfolio()
 
     news = news_fetcher.fetch_all_news()
     prices = price_fetcher.get_prices()
@@ -75,13 +75,20 @@ def run_cycle() -> None:
         for d in decisions:
             print(f"  {d['coin']:<7} {d['action']:<5} (confidence {d['confidence']:.2f}) — {d['reasoning']}")
 
-    executed = paper_trader.process_decisions(decisions, prices, portfolio)
+    try:
+        executed = trader.process_decisions(decisions, prices, portfolio)
+    except RuntimeError as e:
+        # live_trader raises this if the exchange credentials aren't fully set yet —
+        # keep the bot alive and just skip execution this cycle rather than crash.
+        print(f"  [main] {e}")
+        executed = []
+
     for trade in executed:
         pnl_note = f", P&L ${trade['pnl_usdt']:+.2f}" if "pnl_usdt" in trade else ""
         print(f"  EXECUTED: {trade['action']} {trade['coin']} @ ${trade['price']:,.2f}{pnl_note}")
 
-    paper_trader.print_summary(portfolio, prices)
-    paper_trader.log_portfolio_snapshot(portfolio, prices)
+    trader.print_summary(portfolio, prices)
+    trader.log_portfolio_snapshot(portfolio, prices)
 
 
 def main():
