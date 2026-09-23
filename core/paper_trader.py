@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 import config
 import risk_engine
+from storage import save_json
 
 
 def load_portfolio() -> dict:
@@ -27,9 +28,7 @@ def load_portfolio() -> dict:
 
 
 def save_portfolio(portfolio: dict) -> None:
-    os.makedirs(config.DATA_DIR, exist_ok=True)
-    with open(config.PORTFOLIO_FILE, "w") as f:
-        json.dump(portfolio, f, indent=2)
+    save_json(config.PORTFOLIO_FILE, portfolio)
 
 
 def _log_trade(trade: dict) -> None:
@@ -130,7 +129,9 @@ def process_decisions(decisions: list[dict], prices: dict, portfolio: dict) -> l
     Also independently checks every open position for stop-loss / take-profit triggers,
     regardless of what the AI said this cycle.
     """
+    risk_engine.start_day(portfolio, prices)
     executed = []
+    exited = set()
 
     # 1. Hard exits first — these fire even without an AI signal
     for coin, position in list(portfolio["positions"].items()):
@@ -139,19 +140,23 @@ def process_decisions(decisions: list[dict], prices: dict, portfolio: dict) -> l
             continue
         trigger = risk_engine.should_stop_loss_or_take_profit(coin, position, price)
         if trigger:
+            exited.add(coin)
             trade = execute_sell(coin, portfolio, price, reason=trigger)
             if trade:
                 executed.append(trade)
 
     # 2. AI-driven decisions, each checked against risk rules
     for decision in decisions:
+        risk_engine.validate_decision(decision)
         coin = decision["coin"]
+        if coin in exited:
+            continue
         price = prices.get(coin)
         if price is None:
             continue
 
         try:
-            validated = risk_engine.validate_trade(decision, portfolio)
+            validated = risk_engine.validate_trade(decision, portfolio, prices=prices)
         except risk_engine.RiskViolation as e:
             print(f"[paper_trader] Blocked: {e}")
             continue
@@ -159,7 +164,7 @@ def process_decisions(decisions: list[dict], prices: dict, portfolio: dict) -> l
         if validated["action"] == "buy":
             total_value = risk_engine.portfolio_value(portfolio, prices)
             proposed_usdt = total_value * config.MAX_POSITION_SIZE_PCT
-            usdt_amount = risk_engine.check_position_size(coin, proposed_usdt, portfolio)
+            usdt_amount = risk_engine.check_position_size(coin, proposed_usdt, portfolio, prices)
             usdt_amount = min(usdt_amount, portfolio["cash_usdt"])
             if usdt_amount > 10:  # ignore dust trades
                 trade = execute_buy(coin, usdt_amount, price, portfolio, validated["reasoning"])

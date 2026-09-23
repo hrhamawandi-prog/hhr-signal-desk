@@ -518,7 +518,7 @@
   <div class="refresh-row">
     <span id="lastUpdated">Loading…</span> · <button id="refreshBtn" type="button">Refresh now</button>
   </div>
-  <div style="margin-top:6px;">Checks the market and updates itself every 30 minutes. This page refreshes on its own every minute.</div>
+  <div style="margin-top:6px;">Reviews news every 30 minutes; checks protective exits about every 30 seconds while online. This page refreshes on its own every minute.</div>
 </footer>
 
 <script>
@@ -548,6 +548,12 @@
     chart: document.getElementById("chart")
   };
 
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+      return {"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c];
+    });
+  }
+
   function fmtMoney(n) {
     if (n === null || n === undefined || isNaN(n)) return "—";
     return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -574,13 +580,13 @@
 
   function setStatus(ok) {
     els.statusPill.classList.toggle("offline", !ok);
-    els.statusLabel.textContent = ok ? "Bot is running" : "Can't reach bot";
+    els.statusLabel.textContent = ok ? "Bot checks are current" : "Bot needs attention";
   }
 
   function renderPositions(positions) {
     var coins = Object.keys(positions || {});
     if (!coins.length) {
-      els.positionsSub.textContent = "Right now it's holding cash, waiting for a signal worth acting on.";
+      els.positionsSub.textContent = "No open positions are recorded.";
       els.positionsArea.innerHTML = '<div class="empty-state">No open positions — nothing bought yet at this moment.</div>';
       return;
     }
@@ -589,7 +595,7 @@
     coins.forEach(function (coin) {
       var p = positions[coin];
       html += '<div class="position-card">' +
-        '<div class="coin-row"><span class="coin-name">' + coin + '</span></div>' +
+        '<div class="coin-row"><span class="coin-name">' + escapeHtml(coin) + '</span></div>' +
         '<div class="row"><span>Amount held</span><b>' + Number(p.quantity).toFixed(6) + '</b></div>' +
         '<div class="row"><span>Bought at</span><b>' + fmtMoney(p.entry_price) + '</b></div>' +
         '<div class="row"><span>Opened</span><b>' + timeAgo(p.entry_time) + '</b></div>' +
@@ -607,19 +613,19 @@
     }
     var slice = decisions.slice(0, decisionsShown);
     els.decisionsFeed.innerHTML = slice.map(function (d) {
-      var pct = Math.round((d.confidence || 0) * 100);
-      var actionWord = d.action === "buy" ? "Bought" : d.action === "sell" ? "Sold" : "Did nothing";
+      var pct = Math.max(0, Math.min(100, Math.round((Number(d.confidence) || 0) * 100)));
+      var actionWord = d.action === "buy" ? "Suggested buy" : d.action === "sell" ? "Suggested sell" : "Did nothing";
       return '<div class="feed-item">' +
         '<div class="feed-top">' +
-          '<span class="coin-badge">' + d.coin + '</span>' +
-          '<span class="action-word ' + d.action + '">' + actionWord + '</span>' +
+          '<span class="coin-badge">' + escapeHtml(d.coin) + '</span>' +
+          '<span class="action-word ' + escapeHtml(d.action) + '">' + actionWord + '</span>' +
           '<span class="feed-time">' + timeAgo(d.timestamp) + '</span>' +
         '</div>' +
         '<div class="confidence-row">' +
           '<span class="confidence-label">' + confidenceWord(d.confidence) + '</span>' +
           '<div class="confidence-track"><div class="confidence-fill" style="width:' + pct + '%"></div></div>' +
         '</div>' +
-        '<div class="reasoning">' + (d.reasoning || "") + '</div>' +
+        '<div class="reasoning">' + escapeHtml(d.reasoning || "") + '</div>' +
       '</div>';
     }).join("");
     els.moreDecisionsBtn.hidden = decisions.length <= decisionsShown;
@@ -627,7 +633,7 @@
 
   function renderTrades(trades) {
     if (!trades.length) {
-      els.tradesFeed.innerHTML = '<div class="empty-state">No trades yet — every signal so far has been held back, either by the AI itself or the risk rules.</div>';
+      els.tradesFeed.innerHTML = '<div class="empty-state">No confirmed trades recorded yet.</div>';
       return;
     }
     els.tradesFeed.innerHTML = trades.map(function (t) {
@@ -639,8 +645,8 @@
       }
       return '<div class="feed-item">' +
         '<div class="feed-top">' +
-          '<span class="coin-badge">' + t.coin + '</span>' +
-          '<span class="action-word ' + t.action + '">' + actionWord + '</span>' +
+          '<span class="coin-badge">' + escapeHtml(t.coin) + '</span>' +
+          '<span class="action-word ' + escapeHtml(t.action) + '">' + actionWord + '</span>' +
           '<span class="feed-time">' + timeAgo(t.timestamp) + '</span>' +
         '</div>' +
         '<div class="trade-amount"><span>' + Number(t.quantity).toFixed(6) + ' @ ' + fmtMoney(t.price) + '</span>' + pnlHtml + '</div>' +
@@ -732,18 +738,21 @@
 
   function render(data) {
     lastData = data;
-    setStatus(true);
+    setStatus(Boolean(data.health && data.health.healthy));
     renderMode(data.trading_mode);
     var portfolio = data.portfolio || {};
-    var starting = data.starting_balance || 1000;
+    var starting = typeof data.starting_balance === "number" ? data.starting_balance : null;
     var history = data.history || [];
-    var latestValue = history.length ? history[history.length - 1].value : starting;
+    var latestValue = history.length ? history[history.length - 1].value : null;
     var diff = latestValue - starting;
     var pct = (diff / starting) * 100;
 
     els.portfolioValue.textContent = fmtMoney(latestValue);
 
-    if (Math.abs(diff) < 0.005) {
+    if (starting === null || latestValue === null || portfolio.performance_unavailable || starting <= 0) {
+      els.deltaChip.textContent = portfolio.balance_notice || (starting === 0 ? "Started with zero balance; return is not available" : "Waiting for an account baseline");
+      els.deltaChip.className = "change-chip flat";
+    } else if (Math.abs(diff) < 0.005) {
       els.deltaChip.textContent = "No change yet";
       els.deltaChip.className = "change-chip flat";
     } else {
@@ -752,15 +761,16 @@
       els.deltaChip.className = "change-chip " + (diff > 0 ? "positive" : "negative");
     }
 
-    els.cashLine.textContent = "Cash available: " + fmtMoney(portfolio.cash_usdt);
+    els.cashLine.textContent = "Cash available: " + fmtMoney(portfolio.free_cash_usdt == null ? portfolio.cash_usdt : portfolio.free_cash_usdt);
     els.startedLine.textContent = "Started at " + fmtMoney(starting);
 
-    drawChart(history, starting);
+    drawChart(history, starting == null ? 0 : starting);
     renderPositions(portfolio.positions);
     renderDecisions(data.recent_decisions || []);
     renderTrades(data.recent_trades || []);
 
-    els.lastUpdated.textContent = "Updated " + new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    var checked = data.health && data.health.last_risk_check;
+    els.lastUpdated.textContent = "Last protective check: " + (checked ? timeAgo(checked) : "not available") + (data.health && data.health.error ? " · " + data.health.error : "") + (data.pending_orders ? " · Order confirmation pending" : "") + (portfolio.external_change_requires_review ? " · Balance change needs review before new buys" : "");
   }
 
   function load() {

@@ -1,308 +1,258 @@
+"""OKX spot execution with durable order intents and confirmed fills only.
+
+An unresolved submission blocks further orders until its outcome can be reconciled.
+Never infer a fill from an order acknowledgement or retry a timed-out submission.
 """
-Live trading — places REAL orders on your real OKX account, using real money.
-
-This mirrors paper_trader.py's interface exactly (load_portfolio, process_decisions,
-print_summary, log_portfolio_snapshot) so main.py can swap between the two based on
-config.TRADING_MODE without any other code changing.
-
-Safety notes:
-  - The API key this uses must be Trade-only (no Withdraw/Earn/Loan/Transfer) — this
-    code never calls any withdrawal or transfer endpoint, and never could, because the
-    key itself doesn't have that permission on OKX's side.
-  - Only crypto instruments are traded live (via OKX spot). Forex/commodities are
-    skipped in live mode — OANDA live execution isn't wired up.
-  - Every trade still passes through risk_engine's checks (confidence, position size,
-    daily loss limit, max trades/day, stop-loss/take-profit) exactly like paper trading.
-  - LIVE_MAX_TRADE_USDT (config.py) hard-caps every single trade in dollar terms, on
-    top of the normal % based position sizing, so a big deposit doesn't turn into one
-    big first trade.
-"""
-
 import json
 import os
+import uuid
 from datetime import datetime, timezone
-
+from functools import lru_cache
 import ccxt
-
 import config
 import risk_engine
+from storage import read_json, save_json
 
 
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+@lru_cache(maxsize=1)
 def get_exchange():
-    if not (config.EXCHANGE_API_KEY and config.EXCHANGE_API_SECRET and config.EXCHANGE_API_PASSPHRASE):
-        raise RuntimeError(
-            "Live trading needs EXCHANGE_API_KEY, EXCHANGE_API_SECRET, and "
-            "EXCHANGE_API_PASSPHRASE all set (Railway → Variables)."
-        )
-    exchange_class = getattr(ccxt, config.EXCHANGE_NAME)
-    exchange = exchange_class(
-        {
-            "apiKey": config.EXCHANGE_API_KEY,
-            "secret": config.EXCHANGE_API_SECRET,
-            "password": config.EXCHANGE_API_PASSPHRASE,
-            "enableRateLimit": True,
-        }
-    )
-    # Lets ccxt's create_market_buy_order() take an amount in USDT (quote currency)
-    # instead of requiring the coin quantity — much simpler and matches how we size
-    # trades everywhere else in this bot (as a USDT amount).
-    exchange.options["createMarketBuyOrderRequiresPrice"] = False
+    if config.EXCHANGE_NAME != "okx":
+        raise RuntimeError("Live execution currently supports OKX spot only")
+    if not all((config.EXCHANGE_API_KEY, config.EXCHANGE_API_SECRET, config.EXCHANGE_API_PASSPHRASE)):
+        raise RuntimeError("Missing OKX credentials")
+    exchange = ccxt.okx({"apiKey": config.EXCHANGE_API_KEY,
+        "secret": config.EXCHANGE_API_SECRET, "password": config.EXCHANGE_API_PASSPHRASE,
+        "enableRateLimit": True, "timeout": 15000,
+        "options": {"defaultType": "spot"}})
+    exchange.load_markets()
     return exchange
 
 
-def _fetch_account_snapshot(exchange) -> dict:
+def save_portfolio(portfolio):
+    save_json(config.LIVE_PORTFOLIO_FILE, portfolio)
+
+
+def load_portfolio():
+    return read_json(config.LIVE_PORTFOLIO_FILE, {
+        "cash_usdt": 0.0, "positions": {}, "trades_today": {},
+        "starting_value": None, "created_at": now(), "pending_orders": [],
+    })
+
+
+def get_prices():
+    exchange = get_exchange()
+    symbols = [f"{coin}/USDT" for coin in config.WATCHED_COINS
+               if exchange.markets.get(f"{coin}/USDT", {}).get("active") is not False
+               and f"{coin}/USDT" in exchange.markets]
+    tickers = exchange.fetch_tickers(symbols)
+    prices = {}
+    for symbol in symbols:
+        ticker = tickers.get(symbol, {})
+        stamp = ticker.get("timestamp")
+        if not stamp or abs(datetime.now(timezone.utc).timestamp() * 1000 - stamp) > 120000:
+            continue
+        try:
+            prices[symbol.split("/")[0]] = risk_engine.number(ticker.get("last"), positive=True)
+        except risk_engine.RiskViolation:
+            continue
+    return prices
+
+
+def sync_balance(portfolio, exchange, prices):
     balance = exchange.fetch_balance()
-    free_usdt = (balance.get("USDT") or {}).get("free") or 0.0
-    coin_balances = {}
+    usdt = balance.get("USDT") or {}
+    # Total equity includes reserved funds; free funds are the spending limit.
+    cash = risk_engine.number(usdt.get("total") or 0)
+    free = risk_engine.number(usdt.get("free") or 0)
+    old_positions = portfolio.get("positions", {})
+    positions = {}
     for coin in config.WATCHED_COINS:
-        amt = (balance.get(coin) or {}).get("free") or 0.0
-        if amt and amt > 0:
-            coin_balances[coin] = amt
-    return {"cash_usdt": free_usdt, "coin_balances": coin_balances}
-
-
-def load_portfolio() -> dict:
-    if os.path.exists(config.LIVE_PORTFOLIO_FILE):
-        with open(config.LIVE_PORTFOLIO_FILE) as f:
-            return json.load(f)
-
-    # First time running live — pull the real starting point from the exchange
-    # instead of assuming an empty account.
-    exchange = get_exchange()
-    snapshot = _fetch_account_snapshot(exchange)
-
-    portfolio = {
-        "cash_usdt": snapshot["cash_usdt"],
-        "positions": {},
-        "trades_today": {},
-        "starting_value": None,  # filled in once we have live prices, see _ensure_starting_value
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    for coin, qty in snapshot["coin_balances"].items():
-        # Any coins already sitting in the account before the bot started have an
-        # unknown cost basis. entry_price is filled in from the first live price we
-        # see (below), so stop-loss/take-profit measure from "no P&L yet" rather
-        # than a guess.
-        portfolio["positions"][coin] = {
-            "quantity": qty,
-            "entry_price": None,
-            "entry_time": datetime.now(timezone.utc).isoformat(),
-        }
-
+        qty = risk_engine.number((balance.get(coin) or {}).get("total") or 0)
+        if qty <= 0:
+            continue
+        price = risk_engine.number(prices.get(coin), positive=True)
+        old = old_positions.get(coin, {})
+        positions[coin] = {"quantity": qty,
+            "entry_price": old.get("entry_price") or price,
+            "entry_time": old.get("entry_time") or now(),
+            "free_quantity": risk_engine.number((balance.get(coin) or {}).get("free") or 0)}
+    changed = abs(cash - portfolio.get("cash_usdt", 0)) > 0.01 or any(
+        abs(positions.get(c, {}).get("quantity", 0) - old_positions.get(c, {}).get("quantity", 0)) > 1e-10
+        for c in set(positions) | set(old_positions))
+    # Once initialized, unexplained balance changes make return calculations unreliable.
+    # Do not silently count deposits as profit or withdrawals as trading losses.
+    first_funding = (portfolio.get("starting_value") == 0 and
+                     not old_positions and portfolio.get("cash_usdt", 0) == 0 and
+                     not portfolio.get("confirmed_trades") and not any(portfolio.get("trades_today", {}).values()))
+    if portfolio.get("starting_value") is not None and changed and not first_funding:
+        portfolio["performance_unavailable"] = True
+        portfolio["balance_notice"] = "Account balance changed outside recorded fills; return history needs reconciliation."
+        portfolio["external_change_requires_review"] = True
+    portfolio.update(cash_usdt=cash, free_cash_usdt=free, positions=positions, balance_checked_at=now())
+    if portfolio.get("starting_value") is None or first_funding:
+        portfolio["starting_value"] = risk_engine.portfolio_value(portfolio, prices)
+        if first_funding:
+            portfolio["day_start_value"] = portfolio["starting_value"]
     save_portfolio(portfolio)
-    return portfolio
 
 
-def save_portfolio(portfolio: dict) -> None:
-    os.makedirs(config.DATA_DIR, exist_ok=True)
-    with open(config.LIVE_PORTFOLIO_FILE, "w") as f:
-        json.dump(portfolio, f, indent=2)
-
-
-def _log_trade(trade: dict) -> None:
-    os.makedirs(config.LOGS_DIR, exist_ok=True)
-    with open(config.LIVE_TRADES_LOG, "a") as f:
-        f.write(json.dumps(trade) + "\n")
-
-
-def log_portfolio_snapshot(portfolio: dict, prices: dict) -> None:
-    os.makedirs(config.DATA_DIR, exist_ok=True)
-    snapshot = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "value": risk_engine.portfolio_value(portfolio, prices),
-        "cash": portfolio.get("cash_usdt", 0.0),
-    }
-    with open(config.LIVE_PORTFOLIO_HISTORY_LOG, "a") as f:
-        f.write(json.dumps(snapshot) + "\n")
-
-
-def _record_trade_count(portfolio: dict) -> None:
-    today = datetime.now(timezone.utc).date().isoformat()
-    portfolio.setdefault("trades_today", {})
-    portfolio["trades_today"][today] = portfolio["trades_today"].get(today, 0) + 1
-
-
-def _ensure_starting_value(portfolio: dict, prices: dict) -> bool:
-    """Fills in any unknown entry prices and the portfolio's starting_value the
-    first time real prices are available. Returns True if it changed anything
-    (so the caller knows to save)."""
-    changed = False
-    for coin, pos in portfolio["positions"].items():
-        if pos.get("entry_price") is None and prices.get(coin):
-            pos["entry_price"] = prices[coin]
-            changed = True
-    if portfolio.get("starting_value") is None:
-        # Only finalize once every held position has a known price, so the
-        # starting point is accurate rather than partially-priced.
-        if all(pos.get("entry_price") is not None for pos in portfolio["positions"].values()):
-            portfolio["starting_value"] = risk_engine.portfolio_value(portfolio, prices)
-            changed = True
-    return changed
-
-
-def execute_buy(coin: str, usdt_amount: float, price: float, portfolio: dict, reason: str, exchange) -> dict | None:
-    symbol = f"{coin}/USDT"
-    usdt_amount = min(usdt_amount, config.LIVE_MAX_TRADE_USDT)
-    if usdt_amount < 5:  # avoid dust trades / below-minimum-notional rejections
-        return None
-
-    try:
-        order = exchange.create_market_buy_order(symbol, usdt_amount, params={"tgtCcy": "quote_ccy"})
-    except Exception as e:
-        print(f"[live_trader] BUY {coin} failed: {e}")
-        return None
-
-    filled_qty = order.get("filled") or 0.0
-    avg_price = order.get("average") or price
-    spent = order.get("cost") or usdt_amount
-    if not filled_qty:
-        print(f"[live_trader] BUY {coin} order placed (id {order.get('id')}) but no fill info yet — will pick it up next cycle.")
-        return None
-
-    portfolio["cash_usdt"] -= spent
-    existing = portfolio["positions"].get(coin)
-    if existing and existing.get("entry_price") is not None:
-        total_qty = existing["quantity"] + filled_qty
-        avg = (existing["quantity"] * existing["entry_price"] + filled_qty * avg_price) / total_qty
-        portfolio["positions"][coin] = {"quantity": total_qty, "entry_price": avg, "entry_time": existing["entry_time"]}
-    else:
-        portfolio["positions"][coin] = {
-            "quantity": filled_qty,
-            "entry_price": avg_price,
-            "entry_time": datetime.now(timezone.utc).isoformat(),
-        }
-
-    _record_trade_count(portfolio)
-    trade = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "coin": coin,
-        "action": "buy",
-        "quantity": filled_qty,
-        "price": avg_price,
-        "usdt_amount": spent,
-        "reason": reason,
-        "mode": "live",
-        "order_id": order.get("id"),
-    }
-    _log_trade(trade)
-    return trade
-
-
-def execute_sell(coin: str, portfolio: dict, price: float, reason: str, exchange) -> dict | None:
+def _record_confirmed(portfolio, pending, order):
+    qty = risk_engine.number(order.get("filled"))
+    if qty == 0:
+        return
+    cost = risk_engine.number(order.get("cost"), positive=True)
+    price = cost / qty
+    coin, side = pending["coin"], pending["action"]
+    fees = order.get("fees") or ([order["fee"]] if order.get("fee") else [])
+    base_fee = sum(float(f.get("cost") or 0) for f in fees if f.get("currency") == coin)
+    quote_fee = sum(float(f.get("cost") or 0) for f in fees if f.get("currency") == "USDT")
+    if not all(__import__("math").isfinite(x) for x in (base_fee, quote_fee)):
+        raise RuntimeError("Invalid exchange fee")
     position = portfolio["positions"].get(coin)
-    if not position or position.get("quantity", 0) <= 0:
-        return None
-
-    symbol = f"{coin}/USDT"
-    try:
-        amount = float(exchange.amount_to_precision(symbol, position["quantity"]))
-        if amount <= 0:
-            return None
-        order = exchange.create_market_sell_order(symbol, amount)
-    except Exception as e:
-        print(f"[live_trader] SELL {coin} failed: {e}")
-        return None
-
-    filled_qty = order.get("filled") or amount
-    avg_price = order.get("average") or price
-    proceeds = order.get("cost") or (filled_qty * avg_price)
-    entry_price = position.get("entry_price") or avg_price
-    pnl = proceeds - (filled_qty * entry_price)
-
-    portfolio["cash_usdt"] += proceeds
-    remaining = position["quantity"] - filled_qty
-    if remaining > 1e-8:
-        position["quantity"] = remaining
+    trade = {"timestamp": order.get("datetime") or now(), "coin": coin, "action": side,
+        "quantity": qty, "price": price, "usdt_amount": cost, "fees": fees,
+        "reason": pending["reason"], "mode": "live", "order_id": order["id"]}
+    if side == "buy":
+        net_qty = qty - base_fee
+        old_qty = position["quantity"] if position else 0
+        basis = old_qty * position["entry_price"] if position else 0
+        if net_qty <= 0:
+            raise RuntimeError("Invalid net fill quantity")
+        portfolio["positions"][coin] = {"quantity": old_qty + net_qty,
+            "entry_price": (basis + cost + quote_fee) / (old_qty + net_qty),
+            "entry_time": position["entry_time"] if position else now()}
+        portfolio["cash_usdt"] -= cost + quote_fee
     else:
-        del portfolio["positions"][coin]
-
-    _record_trade_count(portfolio)
-    trade = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "coin": coin,
-        "action": "sell",
-        "quantity": filled_qty,
-        "price": avg_price,
-        "usdt_amount": proceeds,
-        "pnl_usdt": pnl,
-        "reason": reason,
-        "mode": "live",
-        "order_id": order.get("id"),
-    }
-    _log_trade(trade)
-    return trade
+        if not position:
+            raise RuntimeError("Sell fill has no corresponding position")
+        removed = qty + base_fee
+        trade["pnl_usdt"] = cost - quote_fee - removed * position["entry_price"]
+        portfolio["cash_usdt"] += cost - quote_fee
+        position["quantity"] -= removed
+        if position["quantity"] <= 1e-10:
+            del portfolio["positions"][coin]
+    day = trade["timestamp"][:10]
+    counts = portfolio.setdefault("trades_today", {})
+    counts[day] = counts.get(day, 0) + 1
+    # The ledger and updated portfolio are committed in one atomic replacement.
+    portfolio.setdefault("confirmed_trades", []).append(trade)
 
 
-def process_decisions(decisions: list[dict], prices: dict, portfolio: dict) -> list[dict]:
-    exchange = get_exchange()
-    if _ensure_starting_value(portfolio, prices):
+def reconcile_orders(portfolio, exchange):
+    for pending in list(portfolio.setdefault("pending_orders", [])):
+        params = {} if pending.get("id") else {"clOrdId": pending["client_id"]}
+        order = exchange.fetch_order(pending.get("id"), pending["symbol"], params)
+        if order.get("status") not in ("closed", "canceled", "expired", "rejected"):
+            return False
+        # Work on a copy, so failed validation cannot partially mutate live state.
+        updated = json.loads(json.dumps(portfolio))
+        _record_confirmed(updated, pending, order)
+        updated["pending_orders"].remove(pending)
+        save_portfolio(updated)
+        portfolio.clear()
+        portfolio.update(updated)
+    return True
+
+
+def submit_order(coin, side, amount, portfolio, exchange, reason):
+    if portfolio.get("pending_orders"):
+        return
+    symbol = f"{coin}/USDT"
+    market = exchange.market(symbol)
+    if not market.get("spot") or market.get("active") is False:
+        raise RuntimeError("Instrument is not an active spot market")
+    if side == "buy":
+        amount = min(amount, config.LIVE_MAX_TRADE_USDT, portfolio.get("free_cash_usdt", 0) / 1.05)
+        amount = float(exchange.cost_to_precision(symbol, amount))
+        minimum = ((market.get("limits") or {}).get("cost") or {}).get("min") or 5
+        if amount < max(5, minimum):
+            return
+    else:
+        amount = min(amount, portfolio["positions"][coin].get("free_quantity", amount))
+        amount = float(exchange.amount_to_precision(symbol, amount))
+        minimum = ((market.get("limits") or {}).get("amount") or {}).get("min") or 0
+        if amount <= 0 or amount < minimum:
+            return
+    pending = {"client_id": uuid.uuid4().hex, "symbol": symbol, "coin": coin,
+               "action": side, "reason": reason, "submitted_at": now()}
+    portfolio.setdefault("pending_orders", []).append(pending)
+    save_portfolio(portfolio)  # Intent exists even if the process dies during the request.
+    try:
+        params = {"clOrdId": pending["client_id"], "tdMode": "cash"}
+        if side == "buy":
+            order = exchange.create_market_buy_order_with_cost(symbol, amount, params)
+        else:
+            order = exchange.create_market_sell_order(symbol, amount, params)
+        pending["id"] = order.get("id")
         save_portfolio(portfolio)
+    except (ccxt.InvalidOrder, ccxt.InsufficientFunds, ccxt.AuthenticationError) as exc:
+        portfolio["pending_orders"].remove(pending)
+        save_portfolio(portfolio)
+        raise RuntimeError(f"Order rejected: {type(exc).__name__}") from None
+    # All other failures retain the intent: outcome may be unknown. No resubmission.
+    reconcile_orders(portfolio, exchange)
 
-    starting_balance = portfolio.get("starting_value")
-    executed = []
 
-    # 1. Hard exits first, same as paper trading — fire even without a fresh AI signal.
+def process_decisions(decisions, prices, portfolio):
+    exchange = get_exchange()
+    before = len(portfolio.get("confirmed_trades", []))
+    if not reconcile_orders(portfolio, exchange):
+        raise RuntimeError("Waiting for confirmation of a previous order; no new orders sent")
+    sync_balance(portfolio, exchange, prices)
+    risk_engine.start_day(portfolio, prices)
+    save_portfolio(portfolio)
+    exited = set()
     for coin, position in list(portfolio["positions"].items()):
-        price = prices.get(coin)
-        if price is None or position.get("entry_price") is None:
-            continue
-        trigger = risk_engine.should_stop_loss_or_take_profit(coin, position, price)
-        if trigger:
-            trade = execute_sell(coin, portfolio, price, reason=trigger, exchange=exchange)
-            if trade:
-                executed.append(trade)
-
-    # 2. AI-driven decisions, each checked against the same risk rules as paper trading.
-    for decision in decisions:
-        coin = decision["coin"]
-        if config.INSTRUMENTS.get(coin, {}).get("type") != "crypto":
-            # Live execution is only wired up for OKX crypto pairs so far.
-            continue
         price = prices.get(coin)
         if price is None:
             continue
-
+        trigger = risk_engine.should_stop_loss_or_take_profit(coin, position, price)
+        if trigger:
+            exited.add(coin)
+            submit_order(coin, "sell", position["quantity"], portfolio, exchange, trigger)
+            if portfolio.get("pending_orders"):
+                break
+            sync_balance(portfolio, exchange, prices)
+    seen = set()
+    for decision in decisions:
+        if portfolio.get("pending_orders"):
+            break
         try:
-            validated = risk_engine.validate_trade(decision, portfolio, starting_balance=starting_balance)
-        except risk_engine.RiskViolation as e:
-            print(f"[live_trader] Blocked: {e}")
-            continue
-
-        if validated["action"] == "buy":
-            total_value = risk_engine.portfolio_value(portfolio, prices)
-            proposed_usdt = total_value * config.MAX_POSITION_SIZE_PCT
-            usdt_amount = risk_engine.check_position_size(coin, proposed_usdt, portfolio)
-            usdt_amount = min(usdt_amount, portfolio["cash_usdt"], config.LIVE_MAX_TRADE_USDT)
-            if usdt_amount > 5:
-                trade = execute_buy(coin, usdt_amount, price, portfolio, validated["reasoning"], exchange)
-                if trade:
-                    executed.append(trade)
-
-        elif validated["action"] == "sell" and coin in portfolio["positions"]:
-            trade = execute_sell(coin, portfolio, price, reason=validated["reasoning"], exchange=exchange)
-            if trade:
-                executed.append(trade)
-
+            risk_engine.validate_trade(decision, portfolio, portfolio.get("starting_value"), prices)
+            coin = decision["coin"]
+            if coin in seen or coin in exited or coin not in prices or coin not in config.WATCHED_COINS:
+                continue
+            seen.add(coin)
+            if decision["action"] == "buy":
+                if portfolio.get("external_change_requires_review"):
+                    continue
+                total = risk_engine.portfolio_value(portfolio, prices)
+                amount = risk_engine.check_position_size(coin, total * config.MAX_POSITION_SIZE_PCT, portfolio, prices)
+                if amount >= 5:
+                    submit_order(coin, "buy", amount, portfolio, exchange, decision["reasoning"])
+            elif decision["action"] == "sell" and coin in portfolio["positions"]:
+                submit_order(coin, "sell", portfolio["positions"][coin]["quantity"], portfolio, exchange, decision["reasoning"])
+            if not portfolio.get("pending_orders"):
+                sync_balance(portfolio, exchange, prices)
+        except risk_engine.RiskViolation as exc:
+            print(f"[risk] {exc}")
     save_portfolio(portfolio)
-    return executed
+    if portfolio.get("pending_orders"):
+        raise RuntimeError("Order awaiting confirmed fill; new orders paused")
+    return portfolio.get("confirmed_trades", [])[before:]
 
 
-def print_summary(portfolio: dict, prices: dict) -> None:
-    total = risk_engine.portfolio_value(portfolio, prices)
-    starting = portfolio.get("starting_value") or total
-    pnl_pct = (total - starting) / starting * 100 if starting else 0.0
+def log_portfolio_snapshot(portfolio, prices):
+    os.makedirs(config.DATA_DIR, exist_ok=True)
+    snapshot = {"timestamp": now(), "value": risk_engine.portfolio_value(portfolio, prices),
+                "cash": portfolio["cash_usdt"]}
+    with open(config.LIVE_PORTFOLIO_HISTORY_LOG, "a", encoding="utf-8") as stream:
+        stream.write(json.dumps(snapshot, allow_nan=False) + "\n")
 
-    print(f"\n{'='*50}")
-    print(f"[LIVE] Account value: ${total:,.2f}  ({pnl_pct:+.2f}% since the bot started managing it)")
-    print(f"Cash (USDT): ${portfolio['cash_usdt']:,.2f}")
-    if portfolio["positions"]:
-        print("Open positions:")
-        for coin, pos in portfolio["positions"].items():
-            entry = pos.get("entry_price") or prices.get(coin, 0)
-            current_price = prices.get(coin, entry)
-            pos_pnl_pct = (current_price - entry) / entry * 100 if entry else 0.0
-            print(
-                f"  {coin}: {pos['quantity']:.6f} @ entry ${entry:,.2f} "
-                f"(now ${current_price:,.2f}, {pos_pnl_pct:+.2f}%)"
-            )
-    print(f"{'='*50}\n")
+
+def print_summary(portfolio, prices):
+    print(f"[LIVE] Managed account value: ${risk_engine.portfolio_value(portfolio, prices):,.2f}")
