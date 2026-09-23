@@ -23,12 +23,13 @@ import news_fetcher
 import price_fetcher
 import ai_decision
 import paper_trader
+import status_server
 
 
 BANNER = r"""
   _  _  _  _  ___  ___  _  _  _   ___  ___  ___  _  __
  | || || || || _ \| _ \| || | | / __|| __|| _ \| |/ /
- | __ || __ ||   /|   /| __ | | \__ \| _| |  _/| ' 
+ | __ || __ ||   /|   /| __ | | \__ \| _| |  _/| ' <
  |_||_||_||_||_|_\|_|_\|_||_| |_||___/|___||_|  |_|\_\
                                          SIGNAL DESK
 """
@@ -80,6 +81,7 @@ def run_cycle() -> None:
         print(f"  EXECUTED: {trade['action']} {trade['coin']} @ ${trade['price']:,.2f}{pnl_note}")
 
     paper_trader.print_summary(portfolio, prices)
+    paper_trader.log_portfolio_snapshot(portfolio, prices)
 
 
 def main():
@@ -91,6 +93,7 @@ def main():
 
     if args.loop:
         interval_sec = config.DECISION_INTERVAL_MINUTES * 60
+        status_server.start_in_background()
         print(f"Running continuously every {config.DECISION_INTERVAL_MINUTES} minutes. Ctrl+C to stop.\n")
         while True:
             try:
