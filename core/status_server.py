@@ -19,6 +19,14 @@ import config
 app = Flask(__name__)
 
 
+@app.after_request
+def add_cors_headers(response):
+    # This is a read-only, no-secrets endpoint — safe to let any page (like
+    # the dashboard) fetch it directly from the browser.
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
+
 def _read_json(path, default):
     if not os.path.exists(path):
         return default
@@ -69,4 +77,3 @@ def start_in_background() -> None:
     trading loop in main.py."""
     thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
-
