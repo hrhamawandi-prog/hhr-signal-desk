@@ -1,23 +1,12 @@
-"""
-Main entry point. Runs one full decision cycle:
-
-  1. Fetch recent news for watched coins
-  2. Fetch current prices
-  3. Ask the AI for a decision per coin
-  4. Run every decision through the risk engine
-  5. Execute whatever survives (paper trading only, for now)
-  6. Print a summary
-
-Run once with `python main.py`, or use --loop to run continuously on the interval
-set in config.py (DECISION_INTERVAL_MINUTES).
-"""
-
+"""Frequent protective checks; slow news/model calls run in a separate worker."""
 import argparse
+import copy
+import os
 import sys
 import time
-
-sys.path.insert(0, "core")
-
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "core"))
 import config
 import news_fetcher
 import price_fetcher
@@ -25,93 +14,68 @@ import ai_decision
 import paper_trader
 import live_trader
 import status_server
+from storage import read_json, save_json
 
 
-BANNER = r"""
-  _  _  _  _  ___  ___  _  _  _   ___  ___  ___  _  __
- | || || || || _ \| _ \| || | | / __|| __|| _ \| |/ /
- | __ || __ ||   /|   /| __ | | \__ \| _| |  _/| ' <
- |_||_||_||_||_|_\|_|_\|_||_| |_||___/|___||_|  |_|\_\
-                                         SIGNAL DESK
-"""
+def timestamp():
+    return datetime.now(timezone.utc).isoformat()
 
 
-def print_startup_banner() -> None:
-    print(BANNER)
-    mode_label = "PAPER TRADING (simulated money)" if config.TRADING_MODE == "paper" else config.TRADING_MODE.upper()
-    print(f"  Mode: {mode_label}")
-    print(f"  Watching: {', '.join(config.ALL_INSTRUMENTS)}")
-    print(f"  Decision interval: every {config.DECISION_INTERVAL_MINUTES} min")
-    print(f"  Starting balance: ${config.STARTING_BALANCE_USDT:,.2f}\n")
+def analyze(prices, portfolio):
+    return ai_decision.get_decisions(news_fetcher.fetch_all_news(), prices, portfolio)
 
 
-def run_cycle() -> None:
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n── Cycle · {timestamp} ({config.TRADING_MODE}) ──")
-
-    live = config.TRADING_MODE == "live"
-    trader = live_trader if live else paper_trader
-
-    if live:
-        print("  Mode: LIVE — placing real orders on your OKX account (crypto instruments only).")
-
+def run_cycle(decisions=None):
+    trader = live_trader if config.TRADING_MODE == "live" else paper_trader
     portfolio = trader.load_portfolio()
-
-    news = news_fetcher.fetch_all_news()
-    prices = price_fetcher.get_prices()
-
+    prices = trader.get_prices() if config.TRADING_MODE == "live" else price_fetcher.get_prices()
     if not prices:
-        print("  No prices available this cycle, skipping.")
-        return
-
-    missing = set(config.ALL_INSTRUMENTS) - set(prices.keys())
-    if missing:
-        print(f"  (no price this cycle for: {', '.join(sorted(missing))} — skipping them)")
-
-    decisions = ai_decision.get_decisions(news, prices, portfolio)
-    if not decisions:
-        print("  AI returned no decisions this cycle.")
-    else:
-        for d in decisions:
-            print(f"  {d['coin']:<7} {d['action']:<5} (confidence {d['confidence']:.2f}) — {d['reasoning']}")
-
-    try:
-        executed = trader.process_decisions(decisions, prices, portfolio)
-    except RuntimeError as e:
-        # live_trader raises this if the exchange credentials aren't fully set yet —
-        # keep the bot alive and just skip execution this cycle rather than crash.
-        print(f"  [main] {e}")
-        executed = []
-
-    for trade in executed:
-        pnl_note = f", P&L ${trade['pnl_usdt']:+.2f}" if "pnl_usdt" in trade else ""
-        print(f"  EXECUTED: {trade['action']} {trade['coin']} @ ${trade['price']:,.2f}{pnl_note}")
-
-    trader.print_summary(portfolio, prices)
+        raise RuntimeError("No fresh prices; trading skipped")
+    trader.process_decisions(decisions or [], prices, portfolio)
     trader.log_portfolio_snapshot(portfolio, prices)
+    health = read_json(config.HEALTH_FILE, {})
+    health.update(last_risk_check=timestamp(), error=None)
+    if decisions is not None:
+        health.update(last_decision_cycle=timestamp(), analysis_error=None)
+    save_json(config.HEALTH_FILE, health)
+    return prices, portfolio
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--loop", action="store_true", help="Run continuously on the configured interval")
+    parser.add_argument("--loop", action="store_true")
     args = parser.parse_args()
-
-    print_startup_banner()
-
-    if args.loop:
-        interval_sec = config.DECISION_INTERVAL_MINUTES * 60
-        status_server.start_in_background()
-        print(f"Running continuously every {config.DECISION_INTERVAL_MINUTES} minutes. Ctrl+C to stop.\n")
-        while True:
+    if not args.loop:
+        prices, portfolio = run_cycle()
+        run_cycle(analyze(prices, portfolio))
+        return
+    print(f"Mode: {config.TRADING_MODE}; protective checks every {config.RISK_CHECK_SECONDS}s", flush=True)
+    status_server.start_in_background()
+    next_decision = 0
+    future = None
+    worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="market-analysis")
+    while True:
+        decisions = None
+        if future is not None and future.done():
             try:
-                run_cycle()
-            except Exception as e:
-                # Never let one bad cycle kill the whole bot — log it and try again
-                # next cycle instead of stopping entirely.
-                print(f"[main] Cycle failed unexpectedly, will retry next cycle: {e}")
-            time.sleep(interval_sec)
-    else:
-        run_cycle()
+                decisions = future.result()
+            except Exception as exc:
+                health = read_json(config.HEALTH_FILE, {})
+                health["analysis_error"] = f"Analysis unavailable ({type(exc).__name__})"
+                save_json(config.HEALTH_FILE, health)
+            future = None
+        try:
+            prices, portfolio = run_cycle(decisions)
+            if future is None and time.monotonic() >= next_decision:
+                future = worker.submit(analyze, copy.deepcopy(prices), copy.deepcopy(portfolio))
+                next_decision = time.monotonic() + config.DECISION_INTERVAL_MINUTES * 60
+        except Exception as exc:
+            # Provider exception strings can contain credentials; record only the type.
+            print(f"Protective check failed: {type(exc).__name__}", flush=True)
+            health = read_json(config.HEALTH_FILE, {})
+            health["error"] = f"Protective check failed ({type(exc).__name__})"
+            save_json(config.HEALTH_FILE, health)
+        time.sleep(config.RISK_CHECK_SECONDS)
 
 
 if __name__ == "__main__":
