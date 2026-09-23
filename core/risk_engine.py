@@ -32,8 +32,11 @@ def check_position_size(coin: str, proposed_usdt: float, portfolio: dict) -> flo
     return proposed_usdt
 
 
-def check_daily_loss_limit(portfolio: dict) -> None:
-    starting = config.STARTING_BALANCE_USDT
+def check_daily_loss_limit(portfolio: dict, starting_balance: float | None = None) -> None:
+    """starting_balance lets live trading check against the real account's own
+    starting value instead of the paper-trading constant. Defaults to the paper
+    constant when not given, so paper_trader's existing calls are unaffected."""
+    starting = starting_balance if starting_balance is not None else config.STARTING_BALANCE_USDT
     current = portfolio_value(portfolio)
     loss_pct = (starting - current) / starting if starting > 0 else 0
     if loss_pct >= config.MAX_DAILY_LOSS_PCT:
@@ -73,13 +76,13 @@ def should_stop_loss_or_take_profit(coin: str, position: dict, current_price: fl
     return None
 
 
-def validate_trade(decision: dict, portfolio: dict) -> dict:
+def validate_trade(decision: dict, portfolio: dict, starting_balance: float | None = None) -> dict:
     """
     Runs all checks for a single proposed trade. Raises RiskViolation if it fails
     outright, or returns the decision with a possibly-reduced size if it's allowed
     through with adjustments.
     """
-    check_daily_loss_limit(portfolio)
+    check_daily_loss_limit(portfolio, starting_balance)
     check_trade_count(portfolio)
 
     if decision["action"] == "hold":
