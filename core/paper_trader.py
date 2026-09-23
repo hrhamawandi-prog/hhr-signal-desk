@@ -38,6 +38,20 @@ def _log_trade(trade: dict) -> None:
         f.write(json.dumps(trade) + "\n")
 
 
+def log_portfolio_snapshot(portfolio: dict, prices: dict) -> None:
+    """Appends a timestamped {value, cash} snapshot so a dashboard can chart
+    portfolio value over time. Called once per cycle, independent of whether
+    any trade happened."""
+    os.makedirs(config.DATA_DIR, exist_ok=True)
+    snapshot = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "value": risk_engine.portfolio_value(portfolio, prices),
+        "cash": portfolio.get("cash_usdt", 0.0),
+    }
+    with open(config.PORTFOLIO_HISTORY_LOG, "a") as f:
+        f.write(json.dumps(snapshot) + "\n")
+
+
 def _record_trade_count(portfolio: dict) -> None:
     today = datetime.now(timezone.utc).date().isoformat()
     portfolio.setdefault("trades_today", {})
