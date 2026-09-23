@@ -45,15 +45,22 @@ def _read_jsonl_tail(path, limit):
 
 @app.route("/status")
 def status():
-    portfolio = _read_json(config.PORTFOLIO_FILE, {})
+    live = config.TRADING_MODE == "live"
+    portfolio_file = config.LIVE_PORTFOLIO_FILE if live else config.PORTFOLIO_FILE
+    trades_log = config.LIVE_TRADES_LOG if live else config.TRADES_LOG
+    history_log = config.LIVE_PORTFOLIO_HISTORY_LOG if live else config.PORTFOLIO_HISTORY_LOG
+
+    portfolio = _read_json(portfolio_file, {})
     decisions = _read_jsonl_tail(config.DECISIONS_LOG, 50)
-    trades = _read_jsonl_tail(config.TRADES_LOG, 50)
-    history = _read_jsonl_tail(config.PORTFOLIO_HISTORY_LOG, 1000)
+    trades = _read_jsonl_tail(trades_log, 50)
+    history = _read_jsonl_tail(history_log, 1000)
+
+    starting_balance = portfolio.get("starting_value") if live else config.STARTING_BALANCE_USDT
 
     return jsonify(
         {
             "trading_mode": config.TRADING_MODE,
-            "starting_balance": config.STARTING_BALANCE_USDT,
+            "starting_balance": starting_balance if starting_balance is not None else config.STARTING_BALANCE_USDT,
             "portfolio": portfolio,
             "recent_decisions": list(reversed(decisions)),
             "recent_trades": list(reversed(trades)),
