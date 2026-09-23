@@ -10,6 +10,7 @@ Fetches recent news relevant to whatever we're watching.
 import requests
 import feedparser
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import config
 
@@ -53,7 +54,7 @@ def fetch_cryptopanic_news(coin: str, limit: int = 10) -> list[dict]:
             for item in results
         ]
     except requests.RequestException as e:
-        print(f"[news_fetcher] CryptoPanic fetch failed for {coin}: {e}")
+        print(f"[news_fetcher] CryptoPanic fetch failed for {coin}: {type(e).__name__}")
         return []
 
 
@@ -62,7 +63,9 @@ def fetch_rss(feed_urls: list[str], limit: int = 10) -> list[dict]:
     items = []
     for feed_url in feed_urls:
         try:
-            feed = feedparser.parse(feed_url)
+            response = requests.get(feed_url, timeout=10)
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
             for entry in feed.entries[:limit]:
                 items.append(
                     {
@@ -75,6 +78,30 @@ def fetch_rss(feed_urls: list[str], limit: int = 10) -> list[dict]:
         except Exception as e:
             print(f"[news_fetcher] RSS fetch failed for {feed_url}: {e}")
     return items
+
+
+def recent_unique(items):
+    result = []
+    seen = set()
+    now = datetime.now(timezone.utc)
+    for item in items:
+        raw = item.get("published_at", "")
+        try:
+            try:
+                stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                stamp = parsedate_to_datetime(raw)
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            age = (now - stamp).total_seconds()
+            title = str(item.get("title", "")).strip()[:500]
+            if not title or age < -300 or age > 86400 or title.casefold() in seen:
+                continue
+            seen.add(title.casefold())
+            result.append(dict(item, title=title, published_at=stamp.isoformat()))
+        except (TypeError, ValueError, AttributeError, OverflowError):
+            continue
+    return sorted(result, key=lambda item: item["published_at"], reverse=True)
 
 
 def fetch_all_news(instruments: list[str] | None = None) -> dict[str, list[dict]]:
@@ -90,9 +117,9 @@ def fetch_all_news(instruments: list[str] | None = None) -> dict[str, list[dict]
     non_crypto_symbols = [s for s in instruments if config.INSTRUMENTS.get(s, {}).get("type") != "crypto"]
 
     for coin in crypto_symbols:
-        news_by_symbol[coin] = fetch_cryptopanic_news(coin)
+        news_by_symbol[coin] = recent_unique(fetch_cryptopanic_news(coin))
 
-    general_items = fetch_rss(CRYPTO_RSS_FEEDS) + fetch_rss(MACRO_RSS_FEEDS)
+    general_items = recent_unique(fetch_rss(CRYPTO_RSS_FEEDS))[:4] + recent_unique(fetch_rss(MACRO_RSS_FEEDS))[:4]
     news_by_symbol["GENERAL"] = general_items
 
     # Forex/commodities don't get a per-symbol feed at the free tier — the AI reads

@@ -1,0 +1,1 @@
+"""HHR Signal Desk implementation."""

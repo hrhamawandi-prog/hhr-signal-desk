@@ -96,3 +96,12 @@ PORTFOLIO_HISTORY_LOG = os.path.join(DATA_DIR, "portfolio_history.jsonl")
 LIVE_PORTFOLIO_FILE = os.path.join(DATA_DIR, "live_portfolio.json")
 LIVE_TRADES_LOG = os.path.join(LOGS_DIR, "live_trades.jsonl")
 LIVE_PORTFOLIO_HISTORY_LOG = os.path.join(DATA_DIR, "live_portfolio_history.jsonl")
+
+# Dashboard credentials belong only in Railway Variables, never in this file.
+HEALTH_FILE = os.path.join(DATA_DIR, "health.json")
+RISK_CHECK_SECONDS = 30
+AI_MODEL = os.getenv("AI_MODEL", "claude-sonnet-5")
+if TRADING_MODE not in ("paper", "live"):
+    raise ValueError("TRADING_MODE must be paper or live")
+if not __import__("math").isfinite(LIVE_MAX_TRADE_USDT) or LIVE_MAX_TRADE_USDT <= 0:
+    raise ValueError("LIVE_MAX_TRADE_USDT must be positive and finite")

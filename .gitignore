@@ -1,6 +1,9 @@
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
-data/portfolio.json
-logs/*.jsonl
+data/
+logs/
+.pytest_cache/
 .DS_Store
