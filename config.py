@@ -75,8 +75,11 @@ MIN_CONFIDENCE_TO_TRADE = 0.65       # AI must be at least this confident (0-1) 
 DECISION_INTERVAL_MINUTES = 30       # how often the bot checks news and reconsiders positions
 
 # --- Paths ---
+# Everything lives under DATA_DIR so a single mounted volume (see Railway
+# "Attach volume" -> /app/data) persists all of it across deploys and restarts.
+# Without a persisted volume, this folder resets every time new code is deployed.
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+LOGS_DIR = os.path.join(DATA_DIR, "logs")
 DECISIONS_LOG = os.path.join(LOGS_DIR, "decisions.jsonl")
 TRADES_LOG = os.path.join(LOGS_DIR, "trades.jsonl")
 PORTFOLIO_FILE = os.path.join(DATA_DIR, "portfolio.json")
