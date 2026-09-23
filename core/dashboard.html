@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HHR Signal Desk">
+<title>HHR Signal Desk</title>
+<style>
+  :root {
+    --bg: #faf7f1;
+    --surface: #ffffff;
+    --surface-2: #f2ede1;
+    --border: #e5ddca;
+    --text: #22271f;
+    --text-dim: #6d7267;
+    --accent: #1f6f5c;
+    --accent-soft: #e1efe8;
+    --positive: #2f8a5f;
+    --positive-soft: #e3f3e9;
+    --negative: #c1483a;
+    --negative-soft: #fbe9e4;
+    --warn: #a5711f;
+    --warn-soft: #f5ecd9;
+    --shadow: 0 1px 2px rgba(30, 30, 10, 0.05), 0 10px 28px -16px rgba(30, 30, 10, 0.22);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #11150f;
+      --surface: #191e16;
+      --surface-2: #20261c;
+      --border: #2d3427;
+      --text: #eef1e9;
+      --text-dim: #9ba392;
+      --accent: #5fcaa6;
+      --accent-soft: #1c3129;
+      --positive: #74d29e;
+      --positive-soft: #17281e;
+      --negative: #e58f7e;
+      --negative-soft: #33211a;
+      --warn: #e3b969;
+      --warn-soft: #332a17;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 36px -18px rgba(0, 0, 0, 0.65);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #11150f;
+    --surface: #191e16;
+    --surface-2: #20261c;
+    --border: #2d3427;
+    --text: #eef1e9;
+    --text-dim: #9ba392;
+    --accent: #5fcaa6;
+    --accent-soft: #1c3129;
+    --positive: #74d29e;
+    --positive-soft: #17281e;
+    --negative: #e58f7e;
+    --negative-soft: #33211a;
+    --warn: #e3b969;
+    --warn-soft: #332a17;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 36px -18px rgba(0, 0, 0, 0.65);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    padding-inline: 16px;
+    padding-block: 18px 40px;
+    max-width: 620px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.4;
+  }
+
+  h1, h2, .display {
+    font-family: "Fraunces", Georgia, serif;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---- header ---- */
+  header.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  header.top h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 5px 11px 5px 9px;
+    border-radius: 999px;
+    background: var(--positive-soft);
+    color: var(--positive);
+    white-space: nowrap;
+  }
+
+  .status-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status-pill.offline { background: var(--negative-soft); color: var(--negative); }
+
+  .mode-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    white-space: nowrap;
+  }
+
+  .mode-pill.live { background: var(--negative-soft); color: var(--negative); }
+
+  header.top .pills { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* ---- generic card ---- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 20px;
+  }
+
+  .section-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 28px 0 4px;
+  }
+
+  .section-sub {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  /* ---- hero ---- */
+  .hero .eyebrow {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+
+  .hero .value {
+    font-size: 2.75rem;
+    font-weight: 600;
+    margin-top: 4px;
+    line-height: 1;
+  }
+
+  .hero .change-line {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+  }
+
+  .change-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.88rem;
+  }
+
+  .change-chip.positive { background: var(--positive-soft); color: var(--positive); }
+  .change-chip.negative { background: var(--negative-soft); color: var(--negative); }
+  .change-chip.flat { background: var(--surface-2); color: var(--text-dim); }
+
+  .hero canvas {
+    width: 100%;
+    height: 110px;
+    display: block;
+    margin-top: 16px;
+  }
+
+  .hero-foot {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+
+  /* ---- paper trading notice ---- */
+  .notice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 0.83rem;
+    margin-top: 12px;
+    line-height: 1.45;
+  }
+
+  .notice b { color: inherit; }
+
+  /* ---- funds card ---- */
+  .funds-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .funds-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    text-decoration: none;
+    color: var(--text);
+  }
+
+  .funds-btn .name {
+    font-weight: 700;
+    font-size: 0.92rem;
+  }
+
+  .funds-btn .hint {
+    font-size: 0.76rem;
+    color: var(--text-dim);
+  }
+
+  .funds-btn .arrow {
+    align-self: flex-end;
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  /* ---- positions ---- */
+  .positions-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  }
+
+  .position-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+  }
+
+  .position-card .coin-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .position-card .coin-name {
+    font-weight: 700;
+    font-size: 0.98rem;
+  }
+
+  .position-card .row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    padding: 2px 0;
+  }
+
+  .position-card .row b { color: var(--text); font-weight: 600; }
+
+  .empty-state {
+    font-size: 0.88rem;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  /* ---- feed items ---- */
+  .feed { display: flex; flex-direction: column; gap: 8px; }
+
+  .feed-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+  }
+
+  .feed-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+
+  .coin-badge {
+    font-weight: 700;
+    font-size: 0.85rem;
+    background: var(--surface-2);
+    padding: 3px 9px;
+    border-radius: 8px;
+  }
+
+  .action-word {
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+
+  .action-word.buy { background: var(--positive-soft); color: var(--positive); }
+  .action-word.sell { background: var(--negative-soft); color: var(--negative); }
+  .action-word.hold { background: var(--surface-2); color: var(--text-dim); }
+
+  .feed-time {
+    margin-left: auto;
+    font-size: 0.76rem;
+    color: var(--text-dim);
+  }
+
+  .confidence-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .confidence-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    white-space: nowrap;
+    width: 46px;
+  }
+
+  .confidence-track {
+    flex: 1;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+
+  .confidence-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+  }
+
+  .reasoning {
+    font-size: 0.87rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .trade-amount {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.87rem;
+    margin-top: 2px;
+  }
+
+  .trade-amount .pnl.positive { color: var(--positive); font-weight: 700; }
+  .trade-amount .pnl.negative { color: var(--negative); font-weight: 700; }
+
+  .show-more {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 10px;
+    margin-top: 4px;
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  footer {
+    margin-top: 30px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.55;
+  }
+
+  .refresh-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .refresh-row button {
+    font: inherit;
+    font-size: 0.78rem;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  @media (max-width: 420px) {
+    .funds-row { grid-template-columns: 1fr; }
+    .hero .value { font-size: 2.2rem; }
+  }
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+
+</head>
+<body>
+<header class="top">
+  <h1>HHR Signal Desk</h1>
+  <div class="pills">
+    <span class="mode-pill" id="modePill">Paper</span>
+    <span class="status-pill" id="statusPill"><span class="dot"></span><span id="statusLabel">Connecting…</span></span>
+  </div>
+</header>
+
+<div class="card hero">
+  <div class="eyebrow" id="balanceEyebrow">Your paper balance</div>
+  <div class="value num" id="portfolioValue">$1,000.00</div>
+  <div class="change-line">
+    <span class="change-chip flat" id="deltaChip">No change yet</span>
+  </div>
+  <canvas id="chart" width="600" height="110"></canvas>
+  <div class="hero-foot">
+    <span id="cashLine">Cash available: —</span>
+    <span id="startedLine">Started at —</span>
+  </div>
+  <div class="notice" id="modeNotice">
+    <span>⚠️</span>
+    <span><b>This is pretend money.</b> The bot is only simulating trades right now — it is not connected to any real bank, exchange, or brokerage account, so nothing here can be deposited, withdrawn, or spent.</span>
+  </div>
+</div>
+
+<div class="section-title">Manage your money</div>
+<div class="section-sub">Deposits and withdrawals always happen through the broker's own app — never through this bot, for your safety.</div>
+<div class="card">
+  <div class="funds-row">
+    <a class="funds-btn" href="https://www.oanda.com/login/" target="_blank" rel="noopener">
+      <span class="name">OANDA</span>
+      <span class="hint">Forex &amp; commodities account</span>
+      <span class="arrow">Open app →</span>
+    </a>
+    <a class="funds-btn" href="https://www.okx.com/account/login" target="_blank" rel="noopener">
+      <span class="name">OKX</span>
+      <span class="hint">Crypto exchange account</span>
+      <span class="arrow">Open app →</span>
+    </a>
+  </div>
+</div>
+
+<div class="section-title">What it's holding right now</div>
+<div class="section-sub" id="positionsSub"></div>
+<div id="positionsArea"></div>
+
+<div class="section-title">What it's been thinking</div>
+<div class="section-sub">Every time it checks the market, it decides whether to buy, sell, or do nothing — and explains why.</div>
+<div class="feed" id="decisionsFeed"></div>
+<button class="show-more" id="moreDecisionsBtn" hidden>Show more</button>
+
+<div class="section-title">Trade history</div>
+<div class="section-sub">Every trade it has actually made.</div>
+<div class="feed" id="tradesFeed"></div>
+
+<footer>
+  <div class="refresh-row">
+    <span id="lastUpdated">Loading…</span> · <button id="refreshBtn" type="button">Refresh now</button>
+  </div>
+  <div style="margin-top:6px;">Checks the market and updates itself every 30 minutes. This page refreshes on its own every minute.</div>
+</footer>
+
+<script>
+(function () {
+  var STATUS_URL = "/status";
+  var DECISIONS_PAGE_SIZE = 6;
+  var decisionsShown = DECISIONS_PAGE_SIZE;
+  var lastData = null;
+
+  var els = {
+    statusPill: document.getElementById("statusPill"),
+    statusLabel: document.getElementById("statusLabel"),
+    modePill: document.getElementById("modePill"),
+    balanceEyebrow: document.getElementById("balanceEyebrow"),
+    modeNotice: document.getElementById("modeNotice"),
+    portfolioValue: document.getElementById("portfolioValue"),
+    deltaChip: document.getElementById("deltaChip"),
+    cashLine: document.getElementById("cashLine"),
+    startedLine: document.getElementById("startedLine"),
+    positionsArea: document.getElementById("positionsArea"),
+    positionsSub: document.getElementById("positionsSub"),
+    decisionsFeed: document.getElementById("decisionsFeed"),
+    moreDecisionsBtn: document.getElementById("moreDecisionsBtn"),
+    tradesFeed: document.getElementById("tradesFeed"),
+    lastUpdated: document.getElementById("lastUpdated"),
+    refreshBtn: document.getElementById("refreshBtn"),
+    chart: document.getElementById("chart")
+  };
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined || isNaN(n)) return "—";
+    return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function confidenceWord(c) {
+    if (c >= 0.65) return "High";
+    if (c >= 0.4) return "Medium";
+    return "Low";
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return "";
+    var then = new Date(iso).getTime();
+    var diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
+    if (diffSec < 60) return "just now";
+    var m = Math.round(diffSec / 60);
+    if (m < 60) return m + "m ago";
+    var h = Math.round(m / 60);
+    if (h < 24) return h + "h ago";
+    var d = Math.round(h / 24);
+    return d + "d ago";
+  }
+
+  function setStatus(ok) {
+    els.statusPill.classList.toggle("offline", !ok);
+    els.statusLabel.textContent = ok ? "Bot is running" : "Can't reach bot";
+  }
+
+  function renderPositions(positions) {
+    var coins = Object.keys(positions || {});
+    if (!coins.length) {
+      els.positionsSub.textContent = "Right now it's holding cash, waiting for a signal worth acting on.";
+      els.positionsArea.innerHTML = '<div class="empty-state">No open positions — nothing bought yet at this moment.</div>';
+      return;
+    }
+    els.positionsSub.textContent = coins.length + " open position" + (coins.length > 1 ? "s" : "");
+    var html = '<div class="positions-grid">';
+    coins.forEach(function (coin) {
+      var p = positions[coin];
+      html += '<div class="position-card">' +
+        '<div class="coin-row"><span class="coin-name">' + coin + '</span></div>' +
+        '<div class="row"><span>Amount held</span><b>' + Number(p.quantity).toFixed(6) + '</b></div>' +
+        '<div class="row"><span>Bought at</span><b>' + fmtMoney(p.entry_price) + '</b></div>' +
+        '<div class="row"><span>Opened</span><b>' + timeAgo(p.entry_time) + '</b></div>' +
+        '</div>';
+    });
+    html += '</div>';
+    els.positionsArea.innerHTML = html;
+  }
+
+  function renderDecisions(decisions) {
+    if (!decisions.length) {
+      els.decisionsFeed.innerHTML = '<div class="empty-state">Nothing logged yet.</div>';
+      els.moreDecisionsBtn.hidden = true;
+      return;
+    }
+    var slice = decisions.slice(0, decisionsShown);
+    els.decisionsFeed.innerHTML = slice.map(function (d) {
+      var pct = Math.round((d.confidence || 0) * 100);
+      var actionWord = d.action === "buy" ? "Bought" : d.action === "sell" ? "Sold" : "Did nothing";
+      return '<div class="feed-item">' +
+        '<div class="feed-top">' +
+          '<span class="coin-badge">' + d.coin + '</span>' +
+          '<span class="action-word ' + d.action + '">' + actionWord + '</span>' +
+          '<span class="feed-time">' + timeAgo(d.timestamp) + '</span>' +
+        '</div>' +
+        '<div class="confidence-row">' +
+          '<span class="confidence-label">' + confidenceWord(d.confidence) + '</span>' +
+          '<div class="confidence-track"><div class="confidence-fill" style="width:' + pct + '%"></div></div>' +
+        '</div>' +
+        '<div class="reasoning">' + (d.reasoning || "") + '</div>' +
+      '</div>';
+    }).join("");
+    els.moreDecisionsBtn.hidden = decisions.length <= decisionsShown;
+  }
+
+  function renderTrades(trades) {
+    if (!trades.length) {
+      els.tradesFeed.innerHTML = '<div class="empty-state">No trades yet — every signal so far has been held back, either by the AI itself or the risk rules.</div>';
+      return;
+    }
+    els.tradesFeed.innerHTML = trades.map(function (t) {
+      var actionWord = t.action === "buy" ? "Bought" : "Sold";
+      var pnlHtml = "";
+      if (typeof t.pnl_usdt === "number") {
+        var cls = t.pnl_usdt >= 0 ? "positive" : "negative";
+        pnlHtml = '<span class="pnl ' + cls + '">' + (t.pnl_usdt >= 0 ? "+" : "") + fmtMoney(t.pnl_usdt) + '</span>';
+      }
+      return '<div class="feed-item">' +
+        '<div class="feed-top">' +
+          '<span class="coin-badge">' + t.coin + '</span>' +
+          '<span class="action-word ' + t.action + '">' + actionWord + '</span>' +
+          '<span class="feed-time">' + timeAgo(t.timestamp) + '</span>' +
+        '</div>' +
+        '<div class="trade-amount"><span>' + Number(t.quantity).toFixed(6) + ' @ ' + fmtMoney(t.price) + '</span>' + pnlHtml + '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  function drawChart(history, startingBalance) {
+    var canvas = els.chart;
+    var ctx = canvas.getContext("2d");
+    var dpr = window.devicePixelRatio || 1;
+    var cssWidth = canvas.clientWidth || 580;
+    var cssHeight = 110;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    var styles = getComputedStyle(document.documentElement);
+    var accent = styles.getPropertyValue("--accent").trim();
+    var textDim = styles.getPropertyValue("--text-dim").trim();
+    var border = styles.getPropertyValue("--border").trim();
+
+    if (!history || history.length < 2) {
+      ctx.fillStyle = textDim;
+      ctx.font = "12px 'Plus Jakarta Sans', sans-serif";
+      ctx.fillText("The chart will fill in once there's more history to show.", 2, cssHeight / 2);
+      return;
+    }
+
+    var values = history.map(function (h) { return h.value; });
+    var min = Math.min.apply(null, values.concat([startingBalance]));
+    var max = Math.max.apply(null, values.concat([startingBalance]));
+    if (min === max) { min -= 1; max += 1; }
+    var padTop = 10, padBottom = 16, padLeft = 2, padRight = 2;
+    var plotH = cssHeight - padTop - padBottom;
+    var plotW = cssWidth - padLeft - padRight;
+
+    function xAt(i) { return padLeft + (i / (values.length - 1)) * plotW; }
+    function yAt(v) { return padTop + (1 - (v - min) / (max - min)) * plotH; }
+
+    ctx.strokeStyle = border;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    var baseY = yAt(startingBalance);
+    ctx.moveTo(padLeft, baseY);
+    ctx.lineTo(cssWidth - padRight, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    var grad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    grad.addColorStop(0, accent + "50");
+    grad.addColorStop(1, accent + "02");
+    ctx.beginPath();
+    ctx.moveTo(xAt(0), yAt(values[0]));
+    values.forEach(function (v, i) { ctx.lineTo(xAt(i), yAt(v)); });
+    ctx.lineTo(xAt(values.length - 1), padTop + plotH);
+    ctx.lineTo(xAt(0), padTop + plotH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(xAt(0), yAt(values[0]));
+    values.forEach(function (v, i) { ctx.lineTo(xAt(i), yAt(v)); });
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2.25;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    var lastX = xAt(values.length - 1), lastY = yAt(values[values.length - 1]);
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 3.75, 0, Math.PI * 2);
+    ctx.fillStyle = accent;
+    ctx.fill();
+  }
+
+  function renderMode(mode) {
+    var isLive = mode === "live";
+    els.modePill.textContent = isLive ? "Live · real money" : "Paper · practice";
+    els.modePill.classList.toggle("live", isLive);
+    els.balanceEyebrow.textContent = isLive ? "Your real balance" : "Your paper balance";
+    if (isLive) {
+      els.modeNotice.innerHTML = '<span>🔴</span><span><b>This is real money.</b> The bot is trading live on your OKX account, inside the risk limits you set. Deposits and withdrawals still only ever happen through OKX’s own app, never through this bot.</span>';
+    } else {
+      els.modeNotice.innerHTML = '<span>⚠️</span><span><b>This is pretend money.</b> The bot is only simulating trades right now — it is not connected to any real bank, exchange, or brokerage account, so nothing here can be deposited, withdrawn, or spent.</span>';
+    }
+  }
+
+  function render(data) {
+    lastData = data;
+    setStatus(true);
+    renderMode(data.trading_mode);
+    var portfolio = data.portfolio || {};
+    var starting = data.starting_balance || 1000;
+    var history = data.history || [];
+    var latestValue = history.length ? history[history.length - 1].value : starting;
+    var diff = latestValue - starting;
+    var pct = (diff / starting) * 100;
+
+    els.portfolioValue.textContent = fmtMoney(latestValue);
+
+    if (Math.abs(diff) < 0.005) {
+      els.deltaChip.textContent = "No change yet";
+      els.deltaChip.className = "change-chip flat";
+    } else {
+      var sign = diff > 0 ? "+" : "";
+      els.deltaChip.textContent = sign + fmtMoney(diff) + " (" + sign + pct.toFixed(2) + "%) since you started";
+      els.deltaChip.className = "change-chip " + (diff > 0 ? "positive" : "negative");
+    }
+
+    els.cashLine.textContent = "Cash available: " + fmtMoney(portfolio.cash_usdt);
+    els.startedLine.textContent = "Started at " + fmtMoney(starting);
+
+    drawChart(history, starting);
+    renderPositions(portfolio.positions);
+    renderDecisions(data.recent_decisions || []);
+    renderTrades(data.recent_trades || []);
+
+    els.lastUpdated.textContent = "Updated " + new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+
+  function load() {
+    fetch(STATUS_URL, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("bad status"); return r.json(); })
+      .then(render)
+      .catch(function () {
+        setStatus(false);
+        els.lastUpdated.textContent = "Couldn't reach the bot just now — will keep trying.";
+      });
+  }
+
+  els.refreshBtn.addEventListener("click", load);
+  els.moreDecisionsBtn.addEventListener("click", function () {
+    decisionsShown += DECISIONS_PAGE_SIZE;
+    if (lastData) renderDecisions(lastData.recent_decisions || []);
+  });
+
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+
+</body>
+</html>

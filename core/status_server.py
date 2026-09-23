@@ -12,11 +12,12 @@ import json
 import os
 import threading
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 
 import config
 
 app = Flask(__name__)
+_HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 @app.after_request
@@ -71,7 +72,10 @@ def status():
 
 @app.route("/")
 def index():
-    return jsonify({"ok": True, "service": "hhr-signal-desk", "see": "/status"})
+    # Serves the real dashboard page — same site as /status, so no
+    # cross-site fetch blocking, and it works with Safari's "Add to
+    # Home Screen" like a normal website.
+    return send_from_directory(_HERE, "dashboard.html")
 
 
 def run_server() -> None:
