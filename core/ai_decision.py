@@ -19,6 +19,33 @@ import config
 import risk_engine
 
 
+def provider_failure_reason(error):
+    """Return only fixed public labels; provider error text may contain secrets."""
+    status = getattr(error, "status_code", None)
+    if status == 400 and "credit balance" in str(error).lower():
+        return "AI account has insufficient credit; add credit in Anthropic billing"
+    return {
+        401: "AI authentication failed; check the configured API key",
+        403: "AI account access denied",
+        404: "Configured AI model is unavailable",
+        429: "AI rate limit reached; analysis will retry on the next cycle",
+    }.get(status, "AI provider request failed")
+
+
+def safe_failure_reason(error):
+    allowed = {
+        "No fresh news available; no AI-driven orders",
+        "AI response contains no text", "AI response unavailable or invalid",
+        "AI returned a non-list response", "AI output failed validation",
+        "AI account has insufficient credit; add credit in Anthropic billing",
+        "AI authentication failed; check the configured API key",
+        "AI account access denied", "Configured AI model is unavailable",
+        "AI rate limit reached; analysis will retry on the next cycle",
+        "AI provider request failed",
+    }
+    reason = str(error)
+    return reason if reason in allowed else f"Analysis unavailable ({type(error).__name__})"
+
 
 DECISION_SCHEMA_INSTRUCTIONS = """
 Respond with ONLY a JSON array, one object per instrument, in this exact shape:
@@ -154,7 +181,9 @@ def get_decisions(news_by_symbol: dict, prices: dict, portfolio: dict) -> list[d
 
         decisions = json.loads(raw_text)
 
-    except (anthropic.APIError, json.JSONDecodeError, IndexError, KeyError, AttributeError) as e:
+    except anthropic.APIError as e:
+        raise RuntimeError(provider_failure_reason(e)) from e
+    except (json.JSONDecodeError, IndexError, KeyError, AttributeError) as e:
         raise RuntimeError("AI response unavailable or invalid") from e
 
     if not isinstance(decisions, list):
