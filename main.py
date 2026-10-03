@@ -68,7 +68,7 @@ def main():
                 decisions = future.result()
             except Exception as exc:
                 health = read_json(config.HEALTH_FILE, {})
-                health["analysis_error"] = f"Analysis unavailable ({type(exc).__name__})"
+                health["analysis_error"] = ai_decision.safe_failure_reason(exc)
                 save_json(config.HEALTH_FILE, health)
             future = None
         try:

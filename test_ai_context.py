@@ -2,10 +2,26 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).parent/'core'))
-from ai_decision import build_prompt, portfolio_context
+from ai_decision import build_prompt, portfolio_context, provider_failure_reason, safe_failure_reason
 
 
 class ContextTests(unittest.TestCase):
+    def test_credit_failure_is_actionable_without_echoing_provider_text(self):
+        error = RuntimeError("Your credit balance is too low PRIVATE_SECRET")
+        error.status_code = 400
+        reason = provider_failure_reason(error)
+        self.assertIn("insufficient credit", reason)
+        self.assertNotIn("PRIVATE_SECRET", reason)
+        self.assertEqual(safe_failure_reason(RuntimeError(reason)), reason)
+
+    def test_unrecognized_failure_does_not_expose_sensitive_text(self):
+        self.assertEqual(safe_failure_reason(RuntimeError("PRIVATE_SECRET")),
+                         "Analysis unavailable (RuntimeError)")
+        error = RuntimeError("PRIVATE_SECRET")
+        error.status_code = 401
+        self.assertIn("authentication failed", provider_failure_reason(error))
+        self.assertNotIn("PRIVATE_SECRET", provider_failure_reason(error))
+
     def test_journal_growth_does_not_grow_prompt(self):
         p={'cash_usdt':100,'positions':{}}
         before=portfolio_context(p,{'BTC':100},'2026-10-02')
