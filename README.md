@@ -1,6 +1,10 @@
 # HHR Signal Desk
 
-Personal news-assisted trading bot with a private, read-only dashboard.
+Personal news-assisted trading bot with a private dashboard and owner control center.
+
+See [UPGRADE_GUIDE.md](UPGRADE_GUIDE.md) for research, costs, audit events and demo-only protection.
+The `/control-center` page provides dashboard alerts, pause/resume-new-buys controls,
+cost recording and research categories. Additional live markets and strategies are not enabled.
 
 ## Modes and limits
 
@@ -29,7 +33,8 @@ Never commit passwords or exchange/API keys. The GitHub source may remain public
 Use Python 3.12 or newer. Install `requirements.txt`, then run:
 
 ```
-python -m unittest test_bot.py -v
+python -m unittest discover -p 'test_*.py'
+node test_control_center.cjs
 python main.py --loop
 ```
 

@@ -53,6 +53,8 @@ class RegressionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.patches = []
+        data_patch = patch.object(config, 'DATA_DIR', self.tmp.name)
+        data_patch.start(); self.patches.append(data_patch)
         for key in ("LIVE_PORTFOLIO_FILE", "PORTFOLIO_FILE", "LIVE_TRADES_LOG", "TRADES_LOG", "DECISIONS_LOG", "HEALTH_FILE", "LIVE_PORTFOLIO_HISTORY_LOG", "PORTFOLIO_HISTORY_LOG"):
             patcher = patch.object(config, key, str(Path(self.tmp.name) / key))
             patcher.start(); self.patches.append(patcher)
