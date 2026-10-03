@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 import config
 import risk_engine
+import operations
 from storage import save_json
 
 
@@ -162,6 +163,9 @@ def process_decisions(decisions: list[dict], prices: dict, portfolio: dict) -> l
             continue
 
         if validated["action"] == "buy":
+            if operations.controls().get('pause_buys'):
+                operations.record('blocked', coin, 'Owner paused paper buys')
+                continue
             total_value = risk_engine.portfolio_value(portfolio, prices)
             proposed_usdt = total_value * config.MAX_POSITION_SIZE_PCT
             usdt_amount = risk_engine.check_position_size(coin, proposed_usdt, portfolio, prices)
