@@ -11,6 +11,7 @@ from functools import lru_cache
 import ccxt
 import config
 import risk_engine
+import operations
 from storage import read_json, save_json
 
 
@@ -95,6 +96,9 @@ def sync_balance(portfolio, exchange, prices):
     portfolio.update(cash_usdt=cash, free_cash_usdt=free, positions=positions, balance_checked_at=now())
     if portfolio.get("starting_value") is None or first_funding:
         portfolio["starting_value"] = risk_engine.portfolio_value(portfolio, prices)
+        if portfolio['starting_value'] > 0:
+            portfolio['benchmark_prices'] = dict(prices)
+            portfolio['benchmark_started_at'] = now()
         if first_funding:
             portfolio["day_start_value"] = portfolio["starting_value"]
     save_portfolio(portfolio)
@@ -166,21 +170,26 @@ def submit_order(coin, side, amount, portfolio, exchange, reason):
     if not market.get("spot") or market.get("active") is False:
         raise RuntimeError("Instrument is not an active spot market")
     if side == "buy":
+        if operations.controls().get("pause_buys"):
+            raise risk_engine.RiskViolation("Owner paused new buys")
         amount = min(amount, config.LIVE_MAX_TRADE_USDT, portfolio.get("free_cash_usdt", 0) / 1.05)
         amount = float(exchange.cost_to_precision(symbol, amount))
         minimum = ((market.get("limits") or {}).get("cost") or {}).get("min") or 5
         if amount < max(5, minimum):
+            operations.record('skipped', coin, 'Order below exchange minimum')
             return
     else:
         amount = min(amount, portfolio["positions"][coin].get("free_quantity", amount))
         amount = float(exchange.amount_to_precision(symbol, amount))
         minimum = ((market.get("limits") or {}).get("amount") or {}).get("min") or 0
         if amount <= 0 or amount < minimum:
+            operations.record('skipped', coin, 'No available quantity above exchange minimum')
             return
     pending = {"client_id": uuid.uuid4().hex, "symbol": symbol, "coin": coin,
                "action": side, "reason": reason, "submitted_at": now()}
     portfolio.setdefault("pending_orders", []).append(pending)
     save_portfolio(portfolio)  # Intent exists even if the process dies during the request.
+    operations.record('intent', coin, reason, action=side)
     try:
         params = {"clOrdId": pending["client_id"], "tdMode": "cash"}
         if side == "buy":
@@ -201,6 +210,7 @@ def process_decisions(decisions, prices, portfolio):
     exchange = get_exchange()
     before = len(portfolio.get("confirmed_trades", []))
     if not reconcile_orders(portfolio, exchange):
+        operations.record('blocked', 'account', 'Prior order confirmation pending')
         raise RuntimeError("Waiting for confirmation of a previous order; no new orders sent")
     sync_balance(portfolio, exchange, prices)
     risk_engine.start_day(portfolio, prices)
@@ -225,20 +235,30 @@ def process_decisions(decisions, prices, portfolio):
             risk_engine.validate_trade(decision, portfolio, portfolio.get("starting_value"), prices)
             coin = decision["coin"]
             if coin in seen or coin in exited or coin not in prices or coin not in config.WATCHED_COINS:
+                operations.record('skipped', coin, 'Duplicate, same-cycle exit, missing price or unsupported live market')
                 continue
             seen.add(coin)
             if decision["action"] == "buy":
                 if portfolio.get("external_change_requires_review"):
+                    operations.record('blocked', coin, 'External balance change requires review')
                     continue
                 total = risk_engine.portfolio_value(portfolio, prices)
                 amount = risk_engine.check_position_size(coin, total * config.MAX_POSITION_SIZE_PCT, portfolio, prices)
+                if config.ADVANCED_ENTRY_FILTERS:
+                    from market_research import entry_budget
+                    amount = min(amount, entry_budget(coin, portfolio, prices, exchange))
                 if amount >= 5:
                     submit_order(coin, "buy", amount, portfolio, exchange, decision["reasoning"])
+                else:
+                    operations.record('blocked', coin, 'Exposure, risk or cash limit leaves less than minimum order')
             elif decision["action"] == "sell" and coin in portfolio["positions"]:
                 submit_order(coin, "sell", portfolio["positions"][coin]["quantity"], portfolio, exchange, decision["reasoning"])
+            else:
+                operations.record('skipped', coin, 'Hold signal or no position to sell')
             if not portfolio.get("pending_orders"):
                 sync_balance(portfolio, exchange, prices)
         except risk_engine.RiskViolation as exc:
+            operations.record('blocked', decision.get('coin', 'unknown') if isinstance(decision, dict) else 'unknown', str(exc))
             print(f"[risk] {exc}")
     save_portfolio(portfolio)
     if portfolio.get("pending_orders"):
@@ -249,7 +269,7 @@ def process_decisions(decisions, prices, portfolio):
 def log_portfolio_snapshot(portfolio, prices):
     os.makedirs(config.DATA_DIR, exist_ok=True)
     snapshot = {"timestamp": now(), "value": risk_engine.portfolio_value(portfolio, prices),
-                "cash": portfolio["cash_usdt"]}
+                "cash": portfolio["cash_usdt"], "prices": prices}
     with open(config.LIVE_PORTFOLIO_HISTORY_LOG, "a", encoding="utf-8") as stream:
         stream.write(json.dumps(snapshot, allow_nan=False) + "\n")
 

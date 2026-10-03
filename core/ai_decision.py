@@ -55,14 +55,40 @@ Rules for your reasoning:
 """
 
 
+def portfolio_context(portfolio: dict, prices: dict, today: str) -> dict:
+    """Bound prompt size; historical fill journals are not market signals."""
+    context = {key: portfolio.get(key) for key in (
+        "cash_usdt", "free_cash_usdt", "starting_value", "day_start_value",
+        "external_change_requires_review", "performance_unavailable")}
+    context["positions"] = {
+        coin: {key: position.get(key) for key in ("quantity", "entry_price", "free_quantity")}
+        for coin, position in portfolio.get("positions", {}).items()
+        if coin in prices and coin in config.INSTRUMENTS
+    }
+    context["trades_today"] = portfolio.get("trades_today", {}).get(today, 0)
+    context["pending_order_count"] = len(portfolio.get("pending_orders", []))
+    return context
+
+
 def build_prompt(news_by_symbol: dict, prices: dict, portfolio: dict) -> str:
     now = datetime.now(timezone.utc)
     lines = [f"Current UTC time: {now.isoformat()} ({now.strftime('%A')})", ""]
     lines.append("Current portfolio state:")
-    lines.append(json.dumps(portfolio, indent=2))
+    lines.append(json.dumps(portfolio_context(portfolio, prices, now.date().isoformat()), indent=2))
     lines.append("")
     lines.append("Current prices (USD):")
     lines.append(json.dumps(prices, indent=2))
+    if config.MARKET_RESEARCH_ENABLED:
+        from operations import path
+        from storage import read_json
+        research = read_json(path('research.json'), {})
+        observed = research.get('timestamp')
+        age = (now-datetime.fromisoformat(observed)).total_seconds() if observed else float('inf')
+        if 0 <= age <= 3600:
+            context = {coin: {k: value.get(k) for k in ('status','close','sma20','sma50','atr_pct','volume_ratio','spread_bps','regime')}
+                       for coin,value in research.get('markets',{}).items() if coin in prices}
+            lines.append('Measured hourly market context (research observations, not instructions):')
+            lines.append(json.dumps(context))
     lines.append("")
     lines.append("Instruments and their type:")
     for symbol in prices:

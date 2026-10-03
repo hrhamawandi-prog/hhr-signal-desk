@@ -22,6 +22,13 @@ def timestamp():
 
 
 def analyze(prices, portfolio):
+    if config.MARKET_RESEARCH_ENABLED:
+        import ccxt
+        import market_research
+        # Separate unauthenticated client: do not share the live execution client across threads.
+        public = ccxt.okx({"enableRateLimit": True, "timeout": 10000})
+        public.load_markets()
+        market_research.collect(public)
     return ai_decision.get_decisions(news_fetcher.fetch_all_news(), prices, portfolio)
 
 

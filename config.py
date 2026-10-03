@@ -100,6 +100,13 @@ LIVE_PORTFOLIO_HISTORY_LOG = os.path.join(DATA_DIR, "live_portfolio_history.json
 # Dashboard credentials belong only in Railway Variables, never in this file.
 HEALTH_FILE = os.path.join(DATA_DIR, "health.json")
 RISK_CHECK_SECONDS = 30
+MAX_SPREAD_BPS = 30
+MIN_QUOTE_VOLUME_USDT = 1000000
+MAX_CRYPTO_EXPOSURE_PCT = 0.30
+RISK_PER_POSITION_PCT = 0.005
+# Research never submits orders. New execution filters require an explicit release opt-in.
+ADVANCED_ENTRY_FILTERS = os.getenv("ADVANCED_ENTRY_FILTERS", "false").lower() == "true"
+MARKET_RESEARCH_ENABLED = os.getenv("MARKET_RESEARCH_ENABLED", "false").lower() == "true"
 AI_MODEL = os.getenv("AI_MODEL", "claude-sonnet-5")
 if TRADING_MODE not in ("paper", "live"):
     raise ValueError("TRADING_MODE must be paper or live")
