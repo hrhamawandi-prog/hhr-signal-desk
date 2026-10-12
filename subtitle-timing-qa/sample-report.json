@@ -1,0 +1,89 @@
+{
+  "product": "HHR Nexus Subtitle Timing QA",
+  "version": "0.1.0",
+  "input_sha256": "36879fcd41bf0cc2dac4d7570c56b114a688dc2e19cdb98dd40dc22a2f7be1ef",
+  "format": "SRT-like",
+  "cues_parsed": 4,
+  "settings": {
+    "max_cps": 20,
+    "max_line": 42,
+    "min_duration": 0.7,
+    "max_duration": 7
+  },
+  "findings_count": 7,
+  "findings": [
+    {
+      "code": "FAST_READING",
+      "cue": 2,
+      "detail": "Approximate reading rate exceeds configured 20 characters/second."
+    },
+    {
+      "code": "SHORT_DURATION",
+      "cue": 2,
+      "detail": "Duration below configured 0.7 seconds."
+    },
+    {
+      "code": "LONG_LINE",
+      "cue": 2,
+      "detail": "A line exceeds configured 42 characters."
+    },
+    {
+      "code": "NON_POSITIVE_DURATION",
+      "cue": 3,
+      "detail": "End must be later than start."
+    },
+    {
+      "code": "LONG_DURATION",
+      "cue": 4,
+      "detail": "Duration above configured 7 seconds."
+    },
+    {
+      "code": "LONG_LINE",
+      "cue": 4,
+      "detail": "A line exceeds configured 42 characters."
+    },
+    {
+      "code": "OVERLAP",
+      "cue": 2,
+      "detail": "Review overlap with 1 cue(s): 1. Overlap can be intentional."
+    }
+  ],
+  "cue_metrics": [
+    {
+      "cue": 1,
+      "start": 1.0,
+      "end": 4.0,
+      "duration": 3.0,
+      "characters": 30,
+      "lines": 1,
+      "characters_per_second": 10.0
+    },
+    {
+      "cue": 2,
+      "start": 3.5,
+      "end": 3.9,
+      "duration": 0.4,
+      "characters": 74,
+      "lines": 1,
+      "characters_per_second": 185.0
+    },
+    {
+      "cue": 3,
+      "start": 6.0,
+      "end": 5.0,
+      "duration": -1.0,
+      "characters": 33,
+      "lines": 1
+    },
+    {
+      "cue": 4,
+      "start": 8.0,
+      "end": 17.0,
+      "duration": 9.0,
+      "characters": 61,
+      "lines": 1,
+      "characters_per_second": 6.78
+    }
+  ],
+  "limitations": "Heuristic timing review only. No audio/video synchronization, translation assessment, complete format validation, accessibility certification, or guarantee. Configured thresholds are preferences, not universal standards. Transcript text is omitted from the report."
+}
