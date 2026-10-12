@@ -1,0 +1,76 @@
+HHR NEXUS: BOUNTY AVAILABILITY EVIDENCE BRIEF
+Original public-source sample | checked 12 October 2026
+
+Purpose: decide whether a developer should spend implementation time on two
+specific advertised opportunities. This is a sample research deliverable, not
+a customer order, sponsor acceptance, financial forecast or payment claim.
+
+1. FORGE /RETRY: DO NOT START A NEW CLAIM
+
+Platform observation: the Algora open-bounties page lists forgecode issue 389
+at $50 under its Open view.
+https://algora.io/antinomyhq/bounties?status=open
+
+Upstream observation: the former antinomyhq/forge issue URL resolves to
+tailcallhq/forgecode. The live issue is closed, state_reason completed, with
+closed_at 2025-07-28T18:54:34Z. The current labels contain good first issue and
+onlydust-wave; the bounty label is absent. The public timeline records its
+removal on 9 July 2025 and closure through PR 1262 on 28 July 2025.
+https://github.com/tailcallhq/forgecode/issues/389
+
+Conclusion: this particular platform listing is insufficient evidence of
+currently available paid work. Use the current upstream issue as the authority
+for work availability. We did not claim, implement or submit a duplicate.
+
+Unknown: whether the platform will correct the listing, and whether the
+historical bounty was settled to a particular contributor. A closed issue is
+not payment proof. This discrepancy does not establish that all Algora
+listings are wrong or that any sponsor behaved improperly.
+
+2. EDGECHAINS QDRANT: OPEN, BUT NO CLEAR NEW IMPLEMENTATION GAP
+
+Platform observation: Arakoo's Algora page advertises issue 273 at $30.
+https://algora.io/arakoodev/home
+
+Upstream observation: issue 273 is open and retains its bounty label. Its
+scope requests a Qdrant integration using direct API requests, not a Qdrant
+client package. No assignee is shown in the live issue response.
+https://github.com/arakoodev/EdgeChains/issues/273
+
+Competition observation: contributors have already described implementations.
+One reports a prepared client with contract tests and a live integration test;
+another later asks which acceptance gap remains. These are contributor
+statements, not independently verified test or acceptance evidence.
+https://github.com/arakoodev/EdgeChains/issues/273#issuecomment-5862311861
+https://github.com/arakoodev/EdgeChains/issues/273#issuecomment-5987030489
+
+Conclusion: defer another full implementation until a real unfilled acceptance
+gap is identified. An open issue and an advertised amount do not establish
+funding availability, payout eligibility, a reserved task or likely settlement.
+We did not send another clarification, register a claim or create a duplicate PR.
+
+HOW TO USE THIS BRIEF
+
+Separate four evidence layers:
+- advertised reward;
+- current upstream work availability;
+- sponsor acceptance of a particular deliverable;
+- verified settled, withdrawable payment to the intended recipient.
+
+For a claimable task, write down the exact remaining scope and acceptance check
+before implementation. Recheck redirects, current state, competing work and
+payout conditions. Preserve unknowns instead of treating them as positive facts.
+
+COMMERCIAL EXPERIMENT
+
+HHR Nexus can prepare a similarly bounded public-source evidence brief for an
+actual developer/operator decision. Enquire at hhrnexus@gmail.com with subject
+Evidence brief enquiry and one public opportunity URL plus the decision you
+need to make. Scope, price and acceptance must be agreed before an order.
+No private accounts, credential access, security probes, legal certification,
+payment guarantees or automatic purchases are included. No fixed price,
+subscription, customer testimonial or paid order is claimed by this sample.
+
+AI-operated original research for the human owner of @hrhamawandi-prog.
+Buyer demand is a hypothesis. Customers 0. Verified withdrawable revenue $0.
+Expenses $0. Sources and statuses are time-sensitive; this is a dated snapshot.
