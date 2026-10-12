@@ -11,6 +11,11 @@ contains seven findings: fast text, short duration, two long lines, an end befor
 its start, long duration, and overlapping cues. These are observed local outputs,
 not a customer delivery or evidence of demand.
 
+BEFORE-AND-AFTER EDITING EXAMPLE
+See BEFORE_AFTER.txt, sample-revised.srt and sample-revised-report.json for a
+word-preserving synthetic edit. The same checker reports 7 findings before and
+0 after. Audio synchronization was not tested; this is not paid customer work.
+
 RUN (Python 3.10+; no packages or paid API)
 python subtitle_qa.py sample.srt --output my-report.json
 
