@@ -24,3 +24,14 @@ Eight engine behavior checks and standalone demo wiring passed. Browser visual v
 
 This independent HHR Nexus product is distributed on a separate branch of an existing owner repository. It does not change or endorse that repository's trading software, and it never places trades or accesses exchange credentials.
 
+## Other HHR Nexus services
+
+Choose a service by the work you need. These are separate enquiry offers; no order is accepted by opening a link.
+
+| Need | Offer and evidence | Ordering |
+| --- | --- | --- |
+| Review a CSV's structure before importing it | [CSV audit service and synthetic report](csv-audit-service) | 5 USDC per agreed file; confirm scope before sending data. |
+| Review subtitle timing and readability | [Subtitle Timing QA](subtitle-timing-qa) with an identical-word synthetic before/after sample and optional local MCP adapter | Enquire for a scoped quote. Timing checks do not verify audio synchronization. |
+| Check whether a technical opportunity is still actionable | [Public-source evidence brief sample](evidence-briefs) | Enquire for a scoped quote. Listed rewards are not proof of funding or payment. |
+
+Contact **hhrnexus@gmail.com** with the relevant service name and a non-confidential description. Share no account credentials or sensitive files. Scope, price and acceptance criteria must be agreed before an order; enquiries and synthetic examples are not customer deliveries or revenue.
