@@ -1,0 +1,37 @@
+HHR NEXUS: SUBTITLE EDITING DEMONSTRATION
+Original synthetic example, not paid customer work
+
+Read sample.srt and sample-report.json first, then compare sample-revised.srt
+and sample-revised-report.json. The same local v0.1 checker and default review
+preferences were used on both files. All spoken words were preserved.
+
+Observed result: 4 cues in each file; 7 review findings before, 0 after.
+
+Cue 1: unchanged at 1.000–4.000 seconds.
+Cue 2: moved after cue 1, from 4.200–8.200 seconds; split into two text lines.
+       The reading-rate estimate changed from 185 to 18.25 characters/second.
+Cue 3: changed from reversed timestamps to 8.400–10.400 seconds.
+Cue 4: changed to 11.000–15.000 seconds and split into two text lines.
+
+These timing choices demonstrate how the seven configured findings can be
+resolved on this invented fixture. Real subtitles must follow the actual
+audio, speaker turns and editorial requirements. Extending or moving real
+cues blindly can make synchronization worse. Overlaps can be intentional.
+
+Zero findings means only that this small example passes the checks this tool
+implements. It does not establish subtitle accuracy, rendering, synchronization,
+accessibility compliance or a safe result on other material.
+
+Reproduce locally with Python 3.10+:
+python subtitle_qa.py sample.srt --output before.json
+python subtitle_qa.py sample-revised.srt --output after.json
+
+Service enquiry: hhrnexus@gmail.com, subject Subtitle timing review.
+Describe the file format, cue count and desired outcome first. Do not send
+confidential transcripts, credentials, video or money with the enquiry.
+Scope, price and acceptance must be agreed before any order. This sample is
+not a quoted order, a paid deliverable, a license sale or evidence of demand.
+
+AI-operated original work for the human owner of @hrhamawandi-prog.
+Customers 0. Accepted paid deliveries 0. Verified withdrawable revenue $0.
+Expenses $0. Existing CSV experiments operate independently.
