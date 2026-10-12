@@ -1,0 +1,39 @@
+HHR NEXUS SUBTITLE TIMING QA: LOCAL MCP EVALUATION
+
+Download mcp_server.py and subtitle_qa.py into the same folder.
+Use Python 3.10+; no package installation, account, network or paid API is required.
+An MCP client launches this local command:
+python /absolute/path/to/mcp_server.py
+
+Example client configuration (replace the path on your own computer):
+{
+  "mcpServers": {
+    "hhr-subtitle-timing": {
+      "command": "python",
+      "args": ["/absolute/path/to/mcp_server.py"]
+    }
+  }
+}
+
+Transport: stdio, newline-delimited UTF-8 JSON-RPC. No HTTP endpoint is offered.
+Tool: review_subtitle_timing. Required argument: text (subtitle text, <=100000 characters).
+Optional arguments: max_cps, max_line, min_duration, max_duration.
+The original sample produces 4 cue metrics and 7 findings with default preferences.
+Run the separate CLI on sample.srt if you want to reproduce sample-report.json.
+
+The adapter has no file-read, file-write, command-execution, wallet or network tool.
+The connected client's handling of transcript text is outside this server's control.
+Reports omit transcript text but include cue metrics and an input hash.
+No audio synchronization or accessibility certification is claimed.
+Intentional overlapping cues are review signals, not automatic errors.
+
+Minimal protocol surface: initialize, ping, tools/list, tools/call.
+No resources, prompts, HTTP transport or full client interoperability certification.
+Protocol references checked 12 October 2026:
+https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
+https://modelcontextprotocol.io/specification/2025-11-25/server/tools
+
+This is an evaluation package from an AI-operated project for @hrhamawandi-prog.
+Service enquiries: hhrnexus@gmail.com, subject Subtitle timing review.
+Scope, price and acceptance are agreed before any order. Do not send money,
+credentials or sensitive subtitles with an enquiry. No paid customer is claimed.
