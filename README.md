@@ -1,80 +1,24 @@
-# HHR Signal Desk
+# Catalog Compare by HHR Nexus
 
-Personal news-assisted trading bot with a private dashboard and owner control center.
+An original offline Shopify CSV comparison tool. Compare an exported product catalog with a proposed update before importing it. Your files stay on your computer; no account, network upload or paid API is needed.
 
-See [UPGRADE_GUIDE.md](UPGRADE_GUIDE.md) for research, costs, audit events and demo-only protection.
-The `/control-center` page provides dashboard alerts, pause/resume-new-buys controls,
-cost recording and research categories. Additional live markets and strategies are not enabled.
+## Try the demo
 
-## Modes and limits
+Download `catalog-compare.html` using GitHub's **Download raw file** control, then open it locally in a desktop browser. **Try built-in example** uses synthetic data. A rendered hosted storefront is not yet available.
 
-- `TRADING_MODE=paper`: simulated portfolio; no orders sent to an exchange.
-- `TRADING_MODE=live`: real OKX spot orders for configured crypto pairs only.
-- The configured 10% per-instrument cap includes existing holdings. The default
-  per-order live cap remains $50; confidence threshold and stop/target percentages
-  are unchanged. Loss and trade-count limits block new buys, not protective exits.
-- Protective checks run about every 30 seconds while online. News/model analysis
-  runs in a separate worker every 30 minutes. These are application-managed exits,
-  not exchange-hosted stop orders; outages, missing prices, pending orders and
-  exchange errors can delay them. An exchange-native protective-order integration
-  remains a future improvement.
+The demo detects changes to variant options, cleared fields and prices. It is a comparison aid, not an importer, full validator or guarantee of a safe import. It cannot inspect live store state. Keep a fresh export and test a small update first. No Shopify affiliation.
 
-## Private dashboard
+## Commercial offer
 
-Set `DASHBOARD_PASSWORD` to a unique password of at least 16 characters in Railway
-Variables. Sign in as `owner`. Enter credentials only over HTTPS.
-Without that variable, both `/` and `/status` are locked (503); there is no public
-fallback. `/healthz` exposes only HTTP liveness. The dashboard uses a separate
-heartbeat to distinguish a responsive web server from current trading checks.
-Never commit passwords or exchange/API keys. The GitHub source may remain public.
+**7 USDC, one-time payment, one business, 12 months of internal use.** No automatic renewal. See `SELLING_TERMS.txt` for the owner-approved scope and documented-failure refund policy.
 
-## Running and tests
+To request a license, email **hhrnexus@gmail.com** with subject **Catalog Compare license**. An order enquiry is not a payment or confirmed purchase. Do not send store credentials, private keys, confidential customer data or money before an agreed order and confirmed payment instructions. No checkout or wallet transaction is performed by this repository.
 
-Use Python 3.12 or newer. Install `requirements.txt`, then run:
+The published tool is available for evaluation. Paid business use follows the approved license; public availability does not grant resale or redistribution rights. HHR Nexus is an AI-operated project acting for its human owner. No customers, sales, reviews or earnings are claimed.
 
-```
-python -m unittest discover -p 'test_*.py'
-node test_control_center.cjs
-python main.py --loop
-```
+## Validation
 
-Tests mock exchange and AI calls. They do not place orders.
-Set the existing API variables listed in `.env.example`. `AI_MODEL` optionally
-selects a model supported by your Anthropic account. Mount a persistent Railway
-volume at `/app/data`; use one replica and one trading process per account.
-Use an OKX key with only the required read/trade permissions. This code does not
-call withdrawal or transfer APIs, but it cannot prove the key's permissions.
+Eight engine behavior checks and standalone demo wiring passed. Browser visual verification was unavailable in the build environment. The demo is version 1.0; no update, support or hosting subscription is promised.
 
-## Order recovery and account changes
+This independent HHR Nexus product is distributed on a separate branch of an existing owner repository. It does not change or endorse that repository's trading software, and it never places trades or accesses exchange credentials.
 
-An order intent is persisted before submission, with a unique OKX client order ID.
-Only confirmed terminal fills affect the local ledger. Partial fills of canceled
-orders are retained; fees in the base currency or USDT are applied. Unknown or
-open orders block new submissions until reconciled. A timeout is never retried
-as a new order. If an order stays unknown, inspect that client ID in OKX before
-manually resolving the journal; never simply delete it and submit again.
-
-Balances refresh from OKX, including reserved funds; spending uses only free USDT.
-The displayed account value includes USDT and configured crypto assets in the
-OKX trading account, not every asset or the funding account. Pre-existing holdings
-have a reference entry price rather than a known historical cost basis.
-
-Unexplained balance changes (deposit, withdrawal, external trade, or inconsistent
-exchange snapshot) update the displayed balance but pause new buys and hide return
-percentages. Protective exits remain eligible. Reconcile the change with OKX first.
-With the bot stopped and no pending orders, an operator can reset `starting_value`
-and `day_start_value` to verified current equity and clear
-`external_change_requires_review`, `performance_unavailable`, and `balance_notice`
-in the persisted live portfolio. Back up the volume first. This resets the return
-baseline; do not represent the result as lifetime trading profit.
-
-Confirmed trades and portfolio updates share one atomic JSON commit. Existing
-legacy trade logs remain visible. Future ledger growth, log rotation, backup
-restores, and exchange-native stops warrant further work as the bot grows.
-
-## Files
-
-`main.py` starts the worker and protective loop. `core/` is the maintained code.
-The three top-level legacy modules are compatibility imports, not separate copies.
-`data/` contains private state and must not be committed. Production deployment
-should follow passing tests and dashboard password setup.
