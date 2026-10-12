@@ -1,0 +1,54 @@
+{
+  "product": "HHR Nexus Subtitle Timing QA",
+  "version": "0.1.0",
+  "input_sha256": "2a2e701615981d0af80318ae38aac81b5ac01638c718d671d0614f14dcef8f5d",
+  "format": "SRT-like",
+  "cues_parsed": 4,
+  "settings": {
+    "max_cps": 20,
+    "max_line": 42,
+    "min_duration": 0.7,
+    "max_duration": 7
+  },
+  "findings_count": 0,
+  "findings": [],
+  "cue_metrics": [
+    {
+      "cue": 1,
+      "start": 1.0,
+      "end": 4.0,
+      "duration": 3.0,
+      "characters": 30,
+      "lines": 1,
+      "characters_per_second": 10.0
+    },
+    {
+      "cue": 2,
+      "start": 4.2,
+      "end": 8.2,
+      "duration": 4.0,
+      "characters": 73,
+      "lines": 2,
+      "characters_per_second": 18.25
+    },
+    {
+      "cue": 3,
+      "start": 8.4,
+      "end": 10.4,
+      "duration": 2.0,
+      "characters": 33,
+      "lines": 1,
+      "characters_per_second": 16.5
+    },
+    {
+      "cue": 4,
+      "start": 11.0,
+      "end": 15.0,
+      "duration": 4.0,
+      "characters": 60,
+      "lines": 2,
+      "characters_per_second": 15.0
+    }
+  ],
+  "limitations": "Heuristic timing review only. No audio/video synchronization, translation assessment, complete format validation, accessibility certification, or guarantee. Configured thresholds are preferences, not universal standards. Transcript text is omitted from the report."
+}
