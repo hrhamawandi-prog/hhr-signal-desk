@@ -1,0 +1,15 @@
+1
+00:00:01,000 --> 00:00:04,000
+Welcome to our synthetic demo.
+
+2
+00:00:03,500 --> 00:00:03,900
+This sentence is deliberately too fast for a comfortable subtitle preview.
+
+3
+00:00:06,000 --> 00:00:05,000
+End time precedes the start time.
+
+4
+00:00:08,000 --> 00:00:17,000
+This line lasts longer than the configured review preference.
