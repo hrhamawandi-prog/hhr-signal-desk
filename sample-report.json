@@ -1,0 +1,51 @@
+{
+  "product": "HHR Nexus Catalog Compare",
+  "version": "1.0.0",
+  "createdAt": "2026-10-12T11:42:46.155Z",
+  "baselineRows": 3,
+  "proposedRows": 2,
+  "baselineProducts": 2,
+  "proposedProducts": 1,
+  "summary": {
+    "review": 3,
+    "changes": 1,
+    "info": 1
+  },
+  "findings": [
+    {
+      "severity": "REVIEW",
+      "code": "BLANK_PRODUCT_FIELD",
+      "handle": "linen-shirt",
+      "line": 2,
+      "detail": "vendor was populated and is now blank in a supplied column. Overwrite can clear saved data."
+    },
+    {
+      "severity": "REVIEW",
+      "code": "OPTIONS_CHANGED",
+      "handle": "linen-shirt",
+      "line": 2,
+      "detail": "Option names, order or values changed. Review variant-ID replacement and app dependencies."
+    },
+    {
+      "severity": "CHANGE",
+      "code": "PRICE_CHANGED",
+      "handle": "linen-shirt",
+      "line": 2,
+      "detail": "Price 29.00 → 25.00."
+    },
+    {
+      "severity": "REVIEW",
+      "code": "BLANK_PRICE",
+      "handle": "linen-shirt",
+      "line": 3,
+      "detail": "A supplied price cell is blank. Review zero-price/default behavior."
+    },
+    {
+      "severity": "INFO",
+      "code": "HANDLE_NOT_IN_FILE",
+      "handle": "coffee-mug",
+      "line": null,
+      "detail": "Omitted product. CSV imports do not delete omitted products."
+    }
+  ]
+}
