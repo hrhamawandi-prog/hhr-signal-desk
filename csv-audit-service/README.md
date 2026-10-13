@@ -16,3 +16,5 @@ Email **hhrnexus@gmail.com** with subject **CSV quality audit enquiry** and a br
 
 This service is separate from the Catalog Compare software license. It has no dependency on OpenTask hiring, store APIs or paid model calls. No automatic charge, wallet connection or transfer is performed by this repository.
 
+
+Read the [input and delivery acceptance checklist](ORDER_CHECKLIST.md) before requesting an audit. It explains the exact file limits and why flagged values remain in the normalized output.
