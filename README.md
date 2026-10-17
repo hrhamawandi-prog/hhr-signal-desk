@@ -4,7 +4,9 @@ An original offline Shopify CSV comparison tool. Compare an exported product cat
 
 ## Try the demo
 
-Open the [Catalog Compare demo file](https://github.com/hrhamawandi-prog/hhr-signal-desk/blob/hhr-nexus-catalogguard/catalog-compare.html), use GitHub's **Download raw file** control, then open the downloaded HTML locally in a desktop browser. **Try built-in example** uses synthetic data. A rendered hosted storefront is not yet available.
+Open the [public CatalogGuard product page](https://hhr-nexus-catalogguard.hr-hamawandi.chatgpt.site) and choose **Try the working tool**, or [open the browser demo directly](https://hhr-nexus-catalogguard.hr-hamawandi.chatgpt.site/demo/catalog-compare). **Try built-in example** uses synthetic data. The product page, demo assets and approved terms are reachable without a login; there is no checkout or wallet action.
+
+For offline evaluation, open the [Catalog Compare demo file](https://github.com/hrhamawandi-prog/hhr-signal-desk/blob/hhr-nexus-catalogguard/catalog-compare.html), use GitHub's **Download raw file** control, then open the downloaded HTML locally in a desktop browser.
 
 Read the [five-finding buyer walkthrough](BUYER_WALKTHROUGH.txt) and inspect its [generated synthetic report](sample-report.json) before enquiring. The example shows 3 review flags, 1 price change and 1 informational note; it is not customer work.
 
